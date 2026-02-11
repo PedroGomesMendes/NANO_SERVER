@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset='UTF-8'>
+<title>NANEYE Viewer</title>
+<style>
+  body { background: #111; color: #eee; text-align: center; }
+  canvas { border: 1px solid #666; }
+</style>
+</head>
+<body>
+<h2>NANEYE Viewer</h2>
+
+<div style="display:flex; align-items:center; gap:25px;">
+  <canvas id="cam" width="328" height="320" style="border:1px solid #666;"></canvas>
+  <label for="sld" style="font-size:22px; color:white;">
+    Exposure: <span id="val">30</span>
+  </label>
+  <input type="range" id="sld" min="0" max="100" value="30" style="width:300px;">
+</div>
+
+<script>
+  const s = document.getElementById('sld');
+  const v = document.getElementById('val');
+
+  // Atualiza valor no ecrã
+  s.oninput = function() {
+    v.innerText = this.value;
+  };
+
+  // Envia valor para o ESP32 apenas quando se larga o slider
+  s.onchange = function() {
+    fetch('/set_exposure?value=' + this.value);
+  };
+</script>
+
+<script>
+const W = 328, H = 320;
+
+async function fetchImage() {
+  const res = await fetch('/image?t=' + Date.now());
+  const buf = await res.arrayBuffer();
+  drawRaw12Mono(new Uint8Array(buf));
+}
+
+function drawRaw12Mono(raw12) {
+  const canvas = document.getElementById('cam');
+  const ctx = canvas.getContext('2d');
+  const img = ctx.createImageData(W, H);
+  const out = img.data;
+  let src = 0, dst = 0;
+
+  for(let y = 0; y < H; y++) {
+    for(let x = 0; x < W; x += 2) {
+
+      if(src + 2 >= raw12.length) break;
+        const b0 = raw12[src];
+        const b1 = raw12[src+1];
+        const b2 = raw12[src+2];
+        src += 3;
+
+        let p0 = (        b0<<4                | ((b1 & 0xF0)>>4)     );   
+        let p1 = (        ((b1 & 0x0F)<<8)     | b2                   ); 
+        p0 &= 0x07FF;   // 10 bits válidos
+        p1 &= 0x07FF;
+        const g0 = p0 >> 3;  // 10 → 8 bits
+        const g1 = p1 >> 3;
+
+        // let p0 = ((b0 << 3) & 0x3F8) | (b1 >> 5);
+        // let p1 = ((b1 << 7) & 0x380) | (b2 >> 1);
+
+        // const g0 = p0;
+        // const g1 = p1;
+
+        out[dst++] = g0;
+        out[dst++] = g0; 
+        out[dst++] = g0; 
+        out[dst++] = 255;
+        out[dst++] = g1; 
+        out[dst++] = g1;
+        out[dst++] = g1; 
+        out[dst++] = 255;
+    }
+  }
+
+  ctx.putImageData(img, 0, 0);
+}
+
+setInterval(fetchImage, 500);  
+</script>
+
+</body>
+</html>

@@ -1,0 +1,59 @@
+{
+  "C_Cpp.intelliSenseEngine": "default",
+  "idf.espIdfPathWin": "C:\\Users\\pmed\\esp\\v5.5.2\\esp-idf",
+  "idf.toolsPathWin": "c:\\Users\\pmed\\esp-idf\\tools",
+  "idf.pythonInstallPath": "c:\\Users\\pmed\\esp-idf\\tools\\tools\\idf-python\\3.11.2\\python.exe",
+  "idf.portWin": "COM13",
+  "files.associations": {
+    "esp_system.h": "c",
+    "esp_wifi.h": "c",
+    "esp_netif.h": "c",
+    "algorithm": "c",
+    "bitset": "c",
+    "deque": "c",
+    "exception": "c",
+    "format": "c",
+    "istream": "c",
+    "iterator": "c",
+    "list": "c",
+    "regex": "c",
+    "stdexcept": "c",
+    "streambuf": "c",
+    "vector": "c",
+    "xhash": "c",
+    "xlocale": "c",
+    "xlocmon": "c",
+    "xstring": "c",
+    "xutility": "c",
+    "string": "c",
+    "array": "c",
+    "string_view": "c",
+    "ostream": "c",
+    "sstream": "c",
+    "*.inc": "c",
+    "esp_psram.h": "c",
+    "charconv": "c",
+    "compare": "c",
+    "complex": "c",
+    "functional": "c",
+    "ratio": "c",
+    "tuple": "c",
+    "type_traits": "c",
+    "utility": "c",
+    "variant": "c"
+  },
+  "idf.flashType": "UART",
+  "idf.openOcdConfigs": [
+    "board/esp32s3-builtin.cfg"
+  ],
+  "idf.customExtraVars": {
+    "IDF_TARGET": "esp32s3"
+  },
+  "clangd.path": "c:\\Users\\pmed\\esp-idf\\tools\\tools\\esp-clang\\esp-19.1.2_20250312\\esp-clang\\bin\\clangd.exe",
+  "clangd.arguments": [
+    "--background-index",
+    "--query-driver=c:\\Users\\pmed\\esp-idf\\tools\\tools\\xtensa-esp-elf\\esp-14.2.0_20241119\\xtensa-esp-elf\\bin\\xtensa-esp32s3-elf-gcc.exe",
+    "--compile-commands-dir=c:\\Users\\pmed\\Desktop\\web\\hello_world\\build"
+  ],
+  "idf.currentSetup": "C:\\Users\\pmed\\esp\\v5.5.2\\esp-idf"
+}

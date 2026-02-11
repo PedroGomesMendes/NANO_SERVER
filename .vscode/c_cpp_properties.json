@@ -1,0 +1,25 @@
+{
+  "configurations": [
+    {
+      "name": "ESP-IDF",
+      "compilerPath": "${config:idf.toolsPathWin}\\tools\\xtensa-esp-elf\\esp-14.2.0_20241119\\xtensa-esp-elf\\bin\\xtensa-esp32s3-elf-gcc.exe",
+      "compileCommands": "${workspaceFolder}/build/compile_commands.json",
+      "cStandard": "c11",
+      "cppStandard": "c++17",
+      "intelliSenseMode": "windows-gcc-x64",
+      "includePath": [
+        "C:/Users/pmed/esp/v5.5/esp-idf/components/**",
+        "${workspaceFolder}/**"
+      ],
+      "defines": [],
+      "browse": {
+        "path": [
+          "C:/Users/pmed/esp/v5.5/esp-idf/components",
+          "${workspaceFolder}"
+        ],
+        "limitSymbolsToIncludedHeaders": true
+      }
+    }
+  ],
+  "version": 4
+}
