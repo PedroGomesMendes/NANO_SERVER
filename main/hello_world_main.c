@@ -1,239 +1,3 @@
-// #include "driver/spi_master.h"
-// #include "driver/gpio.h"
-// #include "esp_wifi.h"
-// #include "esp_event.h"
-// #include "esp_log.h"
-// #include "nvs_flash.h"
-// #include "lwip/sockets.h"
-// #include "lwip/inet.h"
-// #include <string.h>
-// #include <stdint.h>
-// #include <esp_psram.h>
-// #include "esp_task_wdt.h"
-// #include <assert.h>
-
-// #define PIN_NUM_MISO 12
-// #define PIN_NUM_MOSI 17
-// #define PIN_NUM_CLK  13
-// #define PIN_NUM_CS   5
-// #define GPIO_TOGGLE  38
-
-// #define IMG_W 328
-// #define IMG_H 320
-
-// #define PIXEL_SIZE 2
-// #define IMG_SIZE_BYTES (IMG_W * IMG_H * 12/8)
-
-// #define DMA_CHUNK_SIZE (328*4*12/8) 
-// static uint16_t *rx_psram_buffer = NULL;
-// static uint8_t *packet = NULL;
-
-
-// extern volatile bool buffer_ready;  // sinaliza que há dados prontos
-
-
-// #define WIFI_SSID "NOS-3481"
-// #define WIFI_PASS "WHPNSR9R"
-// #define SERVER_IP "192.168.1.176"
-// #define SERVER_PORT 5000
-
-// static const char *TAG = "SPI_UDP";
-
-// volatile uint16_t *rx_buffer = NULL;
-// volatile bool buffer_ready = false;
-
-
-// void pin_toggle() {
-//     gpio_set_level(GPIO_TOGGLE, 1);
-//     gpio_set_level(GPIO_TOGGLE, 0);
-// }
-
-// // Função SPI básica de envio
-// esp_err_t spi_send_data(spi_device_handle_t handle, const uint8_t *data, size_t bits) {
-//     spi_transaction_t t;
-//     memset(&t, 0, sizeof(t));
-//     t.length = bits;
-//     t.tx_buffer = data;
-//     t.flags = 0;
-
-
-//     return spi_device_transmit(handle, &t);
-// }
-
-// // Função SPI básica de leitura DMA
-// esp_err_t spi_read_dma_bits(spi_device_handle_t handle, void *dest_addr, size_t bits) {
-//     if (!dest_addr || bits == 0) return ESP_ERR_INVALID_ARG;
-
-//     spi_transaction_t t;
-//     memset(&t, 0, sizeof(t));
-//     t.length = bits;
-//     t.rx_buffer = dest_addr;
-//     t.tx_buffer = NULL;
-//     t.flags = 0;
-
-//     return spi_device_transmit(handle, &t);
-// }
-
-// // Inicialização Wi-Fi
-// void wifi_init(void) {
-//     ESP_ERROR_CHECK(nvs_flash_init());
-//     ESP_ERROR_CHECK(esp_netif_init());
-//     ESP_ERROR_CHECK(esp_event_loop_create_default());
-//     esp_netif_create_default_wifi_sta();
-
-//     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-//     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-
-//     wifi_config_t wifi_config = {
-//         .sta = {
-//             .ssid = WIFI_SSID,
-//             .password = WIFI_PASS
-//         }
-//     };
-
-//     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-//     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
-//     ESP_ERROR_CHECK(esp_wifi_start());
-//     ESP_ERROR_CHECK(esp_wifi_connect());
-// }
-
-// // Cria socket UDP
-// int udp_create_socket(struct sockaddr_in *dest_addr) {
-//     int sock;
-//     dest_addr->sin_family = AF_INET;
-//     dest_addr->sin_port = htons(SERVER_PORT);
-//     dest_addr->sin_addr.s_addr = inet_addr(SERVER_IP);
-
-//     sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
-//     if (sock < 0) {
-//         ESP_LOGE(TAG, "Erro ao criar socket UDP");
-//         return -1;
-//     }
-
-//     ESP_LOGI(TAG, "Socket UDP criado para %s:%d", SERVER_IP, SERVER_PORT);
-//     return sock;
-// }
-
-// // Core 0: faz SPI e preenche buffer
-// void core0_spi_loop(void *arg) {
-    
-//     uint16_t *frame_buffer = (uint16_t *)arg;  // recebe o ponteiro
-//     uint16_t *temp         = (uint16_t *)arg;  // recebe o ponteiro
-
-
-//     gpio_reset_pin(GPIO_TOGGLE);
-//     gpio_set_direction(GPIO_TOGGLE, GPIO_MODE_OUTPUT);
-
-
-//     spi_bus_config_t buscfg = {
-//         .miso_io_num = PIN_NUM_MISO,
-//         .mosi_io_num = PIN_NUM_MOSI,
-//         .sclk_io_num = PIN_NUM_CLK,
-//         .quadwp_io_num = -1,
-//         .quadhd_io_num = -1,
-//         .max_transfer_sz = 4096 // buffer completo
-//     };
-//     ESP_ERROR_CHECK(spi_bus_initialize(SPI3_HOST, &buscfg, SPI_DMA_CH_AUTO));
-
-//     spi_device_interface_config_t devcfg = {
-//         .clock_speed_hz = 4 * 1000 * 1000,
-//         .mode = 0,
-//         .spics_io_num = PIN_NUM_CS,
-//         .queue_size = 1
-//     };
-
-//     spi_device_handle_t handle;
-//     ESP_ERROR_CHECK(spi_bus_add_device(SPI3_HOST, &devcfg, &handle));
-//     uint8_t tx_data[3];
-
-//     // Sequência SPI inicial
-   
-//     tx_data[0] = 0x00;                                              
-//     spi_send_data(handle, tx_data, 1);
-//     // tx_data[0] = 0x91;  tx_data[1] = 0x41;  tx_data[2] = 0xE3;      
-//     // spi_send_data(handle, tx_data, 24);
-//     tx_data[0] = 0x92;  tx_data[1] = 0x00;  tx_data[2] = 0xCA;      
-//     spi_send_data(handle, tx_data, 24);
-//     tx_data[0] = 0x00;  tx_data[1] = 0x00;                          
-//     spi_send_data(handle, tx_data, 10);
-
-//     // Primeiras leituras para sincronização
-//     spi_read_dma_bits(handle, (void *)rx_buffer, 12 * 329);
-//     spi_read_dma_bits(handle, (void *)rx_buffer, 12 * 656);
-//     spi_read_dma_bits(handle, (void *)rx_buffer, 12 * 656);
-
-//     int offset=0;
-
-//     while (1) 
-//     {
-//         if (offset < IMG_H) {
-
-//             // spi_read_dma_bits(handle,frame_buffer + (offset * 246),IMG_W * 12);
-//             // offset += 1;
-
-//             spi_read_dma_bits(handle, &frame_buffer[offset * 246 ], IMG_W * 12 * 8);
-//             offset= offset + 8; 
-            
-//         } else {
-//             pin_toggle();
-//             buffer_ready = true;
-//             spi_send_data(handle, (void *)rx_buffer, 12 * 328 );
-//             spi_send_data(handle, (void *)rx_buffer, 12 * 8   );
-//             spi_send_data(handle, (void *)rx_buffer, 12 * 648 );
-//             spi_send_data(handle, (void *)rx_buffer, 12 * 656 );
-//             spi_send_data(handle, (void *)rx_buffer, 12 * 328 );
-//             offset = 0;
-//             pin_toggle();
-//         }
-//     }
-// }
-
-
-
-// void core1_udp_loop(void *arg) {
-//     uint8_t *frame_buffer = (uint8_t *)arg; // ponteiro RAW12 empacotado
-//     packet = heap_caps_malloc(494, MALLOC_CAP_SPIRAM);
-
-//     struct sockaddr_in dest_addr;
-//     int sock = udp_create_socket(&dest_addr);
-//     if (sock < 0) return;
-
-//     int num_packets = 320;     
-//     int raw_bytes_per_line = 492; // 328 pixels × 12 bits / 8
-//     uint8_t packet[raw_bytes_per_line + 2]; // +2 bytes para índice da linha
-//     int i = 0;
-
-//     while (1) {
-//         while(i < num_packets){
-//             memcpy(packet, &frame_buffer[i * raw_bytes_per_line], raw_bytes_per_line);
-//             packet[492]     = (uint8_t)(i & 0xFF);       // LSB
-//             packet[493]     = (uint8_t)((i >> 8) & 0xFF); // MSB
-//             sendto(sock, &packet, 494, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
-//             i++;
-//         }
-//         i =0;
-//     }
-// }
-
-
-// void app_main(void) {
-
-//     ESP_LOGI(TAG, "Main running");
-
-//     rx_psram_buffer = heap_caps_malloc(IMG_SIZE_BYTES, MALLOC_CAP_SPIRAM);
-//     if (!rx_psram_buffer) {
-//         ESP_LOGE("MAIN", "Falha ao alocar rx_psram_buffer (%d bytes)", IMG_SIZE_BYTES);
-//         return;
-//     }
-//     esp_task_wdt_deinit();
-
-
-//     wifi_init();
-//     xTaskCreatePinnedToCore(core0_spi_loop, "core0_spi", 8192,(void *)rx_psram_buffer, 1, NULL, 0 );
-//     xTaskCreatePinnedToCore(core1_udp_loop, "core1_udp", 8192,(void *)rx_psram_buffer, 1, NULL, 1 );
-// }
-
-
 #include "driver/spi_master.h"
 #include "driver/gpio.h"
 #include "esp_wifi.h"
@@ -246,13 +10,49 @@
 #include <esp_psram.h>
 #include <assert.h>
 #include "lwip/sockets.h"
+#include "esp_task_wdt.h"
+#include "lwip/inet.h"
+
+#define ROWS_IN_RESET_POS 8
+#define VRST_PIX_POS 6
+#define RAMP_GAIN_POS 4
+#define OFFSET_RAMP_POS 2
+#define OUTPUT_CURR_POS 0
+// Bitpositionen_Reg1
+#define ROWS_DELAY_POS 11
+#define BIAS_CURR_POS 10
+#define CDS_GAIN_POS 9
+#define OUTPUT_MODE_POS 8
+#define MCLK_MODE_POS 6
+#define VREF_POS 4
+#define CVC_CURR_POS 2
+#define IDLE_MODE_POS 1
+#define HIGH_SPEED_POS 0
+
+// Bitmasken_Reg0
+#define ROWS_IN_RESET_MASK 0xFF // 8 Bit
+#define VRST_PIX_MASK 0x03		// 2 Bit
+#define RAMP_GAIN_MASK 0x03		// 2 Bit
+#define OFFSET_RAMP_MASK 0x03	// 2 Bit
+#define OUTPUT_CURR_MASK 0x03	// 2 Bit
+// Bitmasken_Reg1
+#define ROWS_DELAY_MASK 0x1F  // 5 Bit
+#define BIAS_CURR_MASK 0x01	  // 1 Bit
+#define CDS_GAIN_MASK 0x01	  // 1 Bit
+#define OUTPUT_MODE_MASK 0x01 // 1 Bit
+#define MCLK_MODE_MASK 0x03	  // 2 Bit
+#define VREF_MASK 0x03		  // 2 Bit
+#define CVC_CURR_MASK 0x03	  // 2 Bit
+#define IDLE_MODE_MASK 0x01	  // 1 Bit
+#define HIGH_SPEED_MASK 0x01  // 1 Bit
+
 
 
 #define PIN_NUM_MISO 12
 #define PIN_NUM_MOSI 17
 #define PIN_NUM_CLK  13
 #define PIN_NUM_CS   5
-#define GPIO_TOGGLE  38
+#define GPIO_TOGGLE  14
 
 #define IMG_W 328
 #define IMG_H 320
@@ -260,35 +60,93 @@
 #define PIXEL_SIZE 2
 #define IMG_SIZE_BYTES (IMG_W * IMG_H * 12/8)
 
-static uint16_t *rx_psram_buffer = NULL;
-static uint16_t *tx_psram_buffer = NULL;
-static uint8_t *packet = NULL;
+volatile bool buffer_ready = false;
 
+uint8_t *write_buffer = NULL;
+uint8_t *read_buffer  = NULL;
+uint8_t *buffer_a = NULL;
+uint8_t *buffer_b = NULL;
+uint8_t *packet = NULL;
 
-extern volatile bool buffer_ready;  // sinaliza que há dados prontos
-extern volatile bool ready;  // sinaliza que há dados prontos
+#define BITS_PER_PIXEL 12
+#define WORD_BITS      16
 
+#define WORDS_PER_LINE_BITS (IMG_W * BITS_PER_PIXEL)
+#define WORDS_PER_LINE ((WORDS_PER_LINE_BITS + WORD_BITS - 1) / WORD_BITS) // 246
 
 #define WIFI_SSID "NOS-3481"
 #define WIFI_PASS "WHPNSR9R"
-#define SERVER_IP "192.168.1.176"
-#define SERVER_PORT 5000
+
+#define SERVER_IP  "192.168.4.2"
+#define SERVER_PORT 5001
+
+#define  WEBSERVER  1
+#define  UPD_SENDER 0
+#define NUM_TRANS 20
+#define LINES_PER_TRANS 16
+
 
 static const char *TAG = "SPI_UDP";
 
 volatile uint16_t *rx_buffer = NULL;
-volatile bool buffer_ready = false;
-volatile bool ready = false;
+uint8_t rx_data[492*5] = {0};
 
+uint16_t reg0_val;
+uint16_t reg1_val; 
+const uint32_t update_code = 0x9;
 
-void pin_toggle() {
-    gpio_set_level(GPIO_TOGGLE, 1);
+uint32_t frame0 = 0x3A2D91;           //0x912D3A; 
+uint32_t frame1 = 0xCA0092;          // 0x920148; 
+uint32_t temp_frame0 = 0x3A2D91;           //0x912D3A; 
+uint32_t temp_frame1 = 0xCA0092;          // 0x920148; 
+
+spi_transaction_t t;
+spi_transaction_t trans[NUM_TRANS];
+spi_transaction_t *ret_trans;
+
+int exposure = 150; // valor inicial de exposição (ajustável via web)
+int gain = 1;       // valor inicial de ganho (ajustável via web)
+
+uint16_t build_reg0_value(uint8_t rows_in_reset,uint8_t vrst_pix,uint8_t ramp_gain,uint8_t offset_ramp,uint8_t output_curr)
+{
+	uint16_t value = 0;
+
+	value |= ((rows_in_reset & ROWS_IN_RESET_MASK) << ROWS_IN_RESET_POS);
+	value |= ((vrst_pix & VRST_PIX_MASK) << VRST_PIX_POS);
+	value |= ((ramp_gain & RAMP_GAIN_MASK) << RAMP_GAIN_POS);
+	value |= ((offset_ramp & OFFSET_RAMP_MASK) << OFFSET_RAMP_POS);
+	value |= ((output_curr & OUTPUT_CURR_MASK) << OUTPUT_CURR_POS);
+
+	return value;
+}
+
+uint16_t build_reg1_value(uint8_t rows_delay,uint8_t bias_curr_increase,uint8_t cds_gain,uint8_t output_mode,
+                            uint8_t mclk_mode,uint8_t vref,uint8_t cvc_curr,uint8_t idle_mode,uint8_t high_speed)
+{
+	uint16_t value = 0;
+
+	value |= ((rows_delay & ROWS_DELAY_MASK) << ROWS_DELAY_POS);
+	value |= ((bias_curr_increase & BIAS_CURR_MASK) << BIAS_CURR_POS);
+	value |= ((cds_gain & CDS_GAIN_MASK) << CDS_GAIN_POS);
+	value |= ((output_mode & OUTPUT_MODE_MASK) << OUTPUT_MODE_POS);
+	value |= ((mclk_mode & MCLK_MODE_MASK) << MCLK_MODE_POS);
+	value |= ((vref & VREF_MASK) << VREF_POS);
+	value |= ((cvc_curr & CVC_CURR_MASK) << CVC_CURR_POS);
+	value |= ((idle_mode & IDLE_MODE_MASK) << IDLE_MODE_POS);
+	value |= ((high_speed & HIGH_SPEED_MASK) << HIGH_SPEED_POS);
+
+	return value;
+}
+
+void LDO_ON() 
+{
     gpio_set_level(GPIO_TOGGLE, 0);
+    vTaskDelay(pdMS_TO_TICKS(2000));
+    gpio_set_level(GPIO_TOGGLE, 1);
 }
 
 // Função SPI básica de envio
 esp_err_t spi_send_data(spi_device_handle_t handle, const uint8_t *data, size_t bits) {
-    spi_transaction_t t;
     memset(&t, 0, sizeof(t));
     t.length = bits;
     t.tx_buffer = data;
@@ -296,227 +154,466 @@ esp_err_t spi_send_data(spi_device_handle_t handle, const uint8_t *data, size_t 
     return spi_device_transmit(handle, &t);
 }
 
-// Função SPI básica de leitura DMA
+// // Função SPI básica de leitura DMA
 esp_err_t spi_read_dma_bits(spi_device_handle_t handle, void *dest_addr, size_t bits) {
-    if (!dest_addr || bits == 0) return ESP_ERR_INVALID_ARG;
-
-    spi_transaction_t t;
     memset(&t, 0, sizeof(t));
     t.length = bits;
     t.rx_buffer = dest_addr;
     t.tx_buffer = NULL;
     t.flags = 0;
-
     return spi_device_transmit(handle, &t);
 }
 
-// Inicialização Wi-Fi
-void wifi_init(void) {
+// esp_err_t spi_read_dma_bits(spi_device_handle_t handle, void *dest_addr, size_t bits)
+// {
+//     memset(&t, 0, sizeof(t));
+//     t.length   = bits;
+//     t.rxlength = bits;
+//     t.rx_buffer = dest_addr;
+//     return spi_device_polling_transmit(handle, &t);
+// }
+
+esp_err_t spi_read_dma_bits_queue(spi_device_handle_t handle,
+                                  spi_transaction_t *t,
+                                  void *dest_addr,
+                                  size_t bits)
+{
+    memset(t, 0, sizeof(*t));
+
+    t->length    = bits;
+    t->rxlength  = bits;
+    t->rx_buffer = dest_addr;
+
+    return spi_device_queue_trans(handle, t, portMAX_DELAY);
+}
+
+
+void wifi_init_ap(void)
+{
     ESP_ERROR_CHECK(nvs_flash_init());
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-    esp_netif_create_default_wifi_sta();
+
+    esp_netif_create_default_wifi_ap();
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
-    wifi_config_t wifi_config = {
-        .sta = {
-            .ssid = WIFI_SSID,
-            .password = WIFI_PASS
+    wifi_config_t ap_config = {
+        .ap = {
+            .ssid = "NANEYE_CAM",
+            .ssid_len = strlen("NANEYE_CAM"),
+            .password = "12345678",
+            .channel = 6,
+            .max_connection = 2,
+            .authmode = WIFI_AUTH_WPA_WPA2_PSK,
+            .beacon_interval = 100
         }
     };
 
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
+    if (strlen((char *)ap_config.ap.password) == 0) {
+        ap_config.ap.authmode = WIFI_AUTH_OPEN;
+    }
+
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
+
+    ESP_ERROR_CHECK(esp_wifi_set_protocol(
+        WIFI_IF_AP,
+        WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N
+    ));
+
+    ESP_ERROR_CHECK(esp_wifi_set_bandwidth(WIFI_IF_AP, WIFI_BW_HT40));
+
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap_config));
+
     ESP_ERROR_CHECK(esp_wifi_start());
-    ESP_ERROR_CHECK(esp_wifi_connect());
+
+    // Estas ficam depois do start
+    ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
+    ESP_ERROR_CHECK(esp_wifi_set_max_tx_power(60));
+
+    ESP_LOGI("WIFI", "AP iniciado. SSID: %s", ap_config.ap.ssid);
 }
+
+
 
 // Core 0: faz SPI e preenche buffer
 void core0_spi_loop(void *arg) {
     
-    uint16_t *frame_buffer = (uint16_t *)arg;  // recebe o ponteiro
+    while(!buffer_ready);
 
-    gpio_reset_pin(GPIO_TOGGLE);
-    gpio_set_direction(GPIO_TOGGLE, GPIO_MODE_OUTPUT);
-
+    ESP_LOGI(TAG, "A iniciar NANEYE...");
 
     spi_bus_config_t buscfg = {
-        .miso_io_num = PIN_NUM_MISO,
-        .mosi_io_num = PIN_NUM_MOSI,
+        .miso_io_num = PIN_NUM_MOSI ,
+        .mosi_io_num = PIN_NUM_MISO,
         .sclk_io_num = PIN_NUM_CLK,
         .quadwp_io_num = -1,
         .quadhd_io_num = -1,
-        .max_transfer_sz = 4096 // buffer completo
+        .max_transfer_sz = 65536  // buffer completo
     };
     ESP_ERROR_CHECK(spi_bus_initialize(SPI3_HOST, &buscfg, SPI_DMA_CH_AUTO));
 
     spi_device_interface_config_t devcfg = {
-        .clock_speed_hz = 4 * 1000 * 1000,
+        .clock_speed_hz = 31*1000*1000,
         .mode = 0,
         .spics_io_num = PIN_NUM_CS,
-        .queue_size = 1
-    };
+        .queue_size = 8
+        };
 
     spi_device_handle_t handle;
+
+
     ESP_ERROR_CHECK(spi_bus_add_device(SPI3_HOST, &devcfg, &handle));
     uint8_t tx_data[3];
 
-    while (!ready){    }
+    esp_rom_delay_us(5000);
 
 
-    int offset=0;
-    tx_data[0] = 0x00;                                          spi_send_data(handle, tx_data, 1);
-    tx_data[0] = 0x91;  tx_data[1] = 0x2D;  tx_data[2] = 0x3A;  spi_send_data(handle, tx_data, 24);
-    tx_data[0] = 0x92;  tx_data[1] = 0x00;  tx_data[2] = 0xC8;  spi_send_data(handle, tx_data, 24);
-    tx_data[0] = 0x00;  tx_data[1] = 0x00;  tx_data[2] = 0x00;  spi_send_data(handle, tx_data, 23);
+    tx_data[0] = 0x00;                                          
+    spi_send_data(handle, tx_data, 1);
+    spi_send_data(handle, (uint8_t*) &frame0, 24);
+    spi_send_data(handle, (uint8_t*) &frame1, 24);
 
-    spi_read_dma_bits(handle, (void *)rx_buffer, 12 * 328);
-    spi_read_dma_bits(handle, (void *)rx_buffer, 12 * 656);
+    esp_rom_delay_us(10);
+    tx_data[0] = 0x00;  
+    tx_data[1] = 0x00;  
+    tx_data[2] = 0x00;  
+    spi_send_data(handle, tx_data, (4*12)-2);  //READ IGNORE
+
+    spi_send_data(handle, rx_data, 12 * (1312+329));
+    int offset = 0;
+
+    for (offset = 0; offset < IMG_H; offset += 16) { 
+    spi_read_dma_bits(handle,write_buffer + (offset * 492),IMG_W * 12 * 16);   
+    }
+
+    spi_read_dma_bits(handle, rx_data, 12 * 8);
+
 
     while (1) 
     {
+
+        offset = 0;
+        spi_send_data(handle, (uint8_t*) &frame0, 24);
+        spi_send_data(handle, (uint8_t*) &frame1, 24);
+        spi_send_data(handle, rx_data, 12 * 644);
+        spi_send_data(handle, rx_data, 12 * 2 * 328);
+        spi_send_data(handle, rx_data, 12 * 2 * 328);
         while (offset < IMG_H) 
         {
-            spi_read_dma_bits(handle, &frame_buffer[offset * 246 ], IMG_W * 12 * 8);
-            offset= offset + 8;
-        } 
-        spi_read_dma_bits(handle, (void *)rx_buffer, 12 * 8);
-        offset = 0;
-        memcpy(tx_psram_buffer,frame_buffer,IMG_SIZE_BYTES);
+            spi_read_dma_bits(handle, write_buffer + (offset * 492), (IMG_W * 12 * 16));
+            offset +=16;
+        }
+        //ESP_LOG_BUFFER_HEX(TAG, write_buffer, 32);
 
-        // spi_read_dma_bits(handle, (void *)rx_buffer, 12 * 656);
-        // spi_read_dma_bits(handle, (void *)rx_buffer, 12 * 656);
-        // spi_read_dma_bits(handle, (void *)rx_buffer, 12 * 328);
+        uint8_t *tmp = write_buffer;
+        write_buffer = read_buffer;
+        read_buffer = tmp;
 
-        //ESP_LOGE("MAIN", "LINHA %d", offset);
 
-        
-        // tx_data[0] = 0x91;  tx_data[1] = 0x41;  tx_data[2] = 0x3A;  spi_send_data(handle, tx_data, 24);
-        // tx_data[0] = 0x92;  tx_data[1] = 0x01;  tx_data[2] = 0x48;  spi_send_data(handle, tx_data, 24);
-        // spi_read_dma_bits(handle, (void *)rx_buffer, 12 * 320    );
+        spi_send_data(handle, rx_data, 12 * 8);
+
+        // int idx = 0;
+        // int queued = 0;
+
+        // int in_flight = 0;
+
+        // // 🔹 Pré-carregar pipeline
+        // while (in_flight < devcfg.queue_size && offset < IMG_H)
+        // {
+        //     spi_transaction_t *t_local = &trans[in_flight];
+        //     memset(t_local, 0, sizeof(*t_local));
+
+        //     t_local->length    = IMG_W * 12 * LINES_PER_TRANS;
+        //     t_local->rxlength  = t_local->length;
+        //     t_local->rx_buffer = write_buffer + (offset * 492);
+
+        //     ESP_ERROR_CHECK(spi_device_queue_trans(handle, t_local, portMAX_DELAY));
+
+        //     offset += LINES_PER_TRANS;
+        //     in_flight++;
+        // }
+
+        // // 🔁 Loop contínuo (DMA circular fake)
+        // while (offset < IMG_H)
+        // {
+        //     ESP_ERROR_CHECK(
+        //         spi_device_get_trans_result(handle, &ret_trans, portMAX_DELAY)
+        //     );
+
+        //     in_flight--;
+
+        //     // reutiliza descriptor (CRÍTICO)
+        //     memset(ret_trans, 0, sizeof(*ret_trans));
+
+        //     ret_trans->length    = IMG_W * 12 * LINES_PER_TRANS;
+        //     ret_trans->rxlength  = ret_trans->length;
+        //     ret_trans->rx_buffer = write_buffer + (offset * 492);
+
+        //     ESP_ERROR_CHECK(
+        //         spi_device_queue_trans(handle, ret_trans, portMAX_DELAY)
+        //     );
+
+        //     offset += LINES_PER_TRANS;
+        //     in_flight++;
+        // }
+
+        // // 🔹 drenar resto
+        // while (in_flight > 0)
+        // {
+        //     ESP_ERROR_CHECK(
+        //         spi_device_get_trans_result(handle, &ret_trans, portMAX_DELAY)
+        //     );
+        //     in_flight--;
+        // }
+
     }
 }
 
+#if WEBSERVER
+
+    extern const uint8_t index_html_start[] asm("_binary_index_html_start");
+    extern const uint8_t index_html_end[]   asm("_binary_index_html_end");
 
 
-extern const uint8_t index_html_start[] asm("_binary_index_html_start");
-extern const uint8_t index_html_end[]   asm("_binary_index_html_end");
+    static esp_err_t index_handler(httpd_req_t *req)
+    {
+        size_t index_html_size = index_html_end - index_html_start;
+
+        httpd_resp_set_type(req, "text/html");
+        httpd_resp_send(req, (const char *)index_html_start, index_html_size);
+
+        return ESP_OK;
+    }
+
+    static esp_err_t image_handler(httpd_req_t *req)
+    {
+        httpd_resp_set_type(req, "application/octet-stream");
+        httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
+        httpd_resp_set_hdr(req, "Connection", "keep-alive");
+
+        httpd_resp_send(req, (char *)read_buffer, IMG_SIZE_BYTES);
+
+        return ESP_OK;
+    }
+
+    int update_reg() {
+        reg0_val = build_reg0_value(
+        exposure &0xFF  ,// rows_in_reset
+        0b10            ,// vrst_pix
+        gain&0x03       ,// ramp_gain
+        0b11,		        // offset_ramp
+        0b11		        // output_curr
+        );
+                
+        reg1_val = build_reg1_value(
+        0b000000, // rows_delay, 00001
+        0,		  // bias_curr_increase
+        0,		  // cds_gain
+        0,		  // output_mode
+        0b10,	  // mclk_mode
+        0b10,	  // vref
+        0b01,	  // cvc_curr
+        0,		  // idle_mode
+        1		  // high_speed
+        );
+
+        temp_frame0 = ((update_code & 0xF) << 20) | ((0 & 0x7) << 17) | ((uint32_t)reg0_val << 1);
+        temp_frame1 = ((update_code & 0xF) << 20) | ((1 & 0x7) << 17) | ((uint32_t)reg1_val << 1); 
+
+        frame0 = ((temp_frame0 & 0x0000FF) << 16) |
+        ( temp_frame0 & 0x00FF00) |
+        ((temp_frame0 & 0xFF0000) >> 16);             
+
+        frame1 = ((temp_frame1 & 0x0000FF) << 16) |
+        ( temp_frame1 & 0x00FF00) |
+        ((temp_frame1 & 0xFF0000) >> 16); 
+        return 0;
+    }
+
+    static esp_err_t gain_handler(httpd_req_t *req)
+    {
+        char buf[32];
+        int buf_len = httpd_req_get_url_query_len(req) + 1;
+
+        if (buf_len > sizeof(buf)) return ESP_FAIL;
+
+        if (httpd_req_get_url_query_str(req, buf, buf_len) == ESP_OK) {
+            char param[8];
+            if (httpd_query_key_value(buf, "value", param, sizeof(param)) == ESP_OK) {
+             gain = atoi(param);
+                update_reg();
+            }
+        }
+
+        httpd_resp_send(req, "OK", 2);
+        return ESP_OK;
+    }
+
+    static esp_err_t exposure_handler(httpd_req_t *req)
+    {
+        char buf[32];
+        int buf_len = httpd_req_get_url_query_len(req) + 1;
+
+        if (buf_len > sizeof(buf)) return ESP_FAIL;
+
+        if (httpd_req_get_url_query_str(req, buf, buf_len) == ESP_OK) {
+            char param[8];
+            if (httpd_query_key_value(buf, "value", param, sizeof(param)) == ESP_OK) {
+                exposure = atoi(param);
+                update_reg();
+            }
+        }
+
+        httpd_resp_send(req, "OK", 2);
+        return ESP_OK;
+    }
+
+    // --- Configuração e arranque do WebServer ---
+    static httpd_handle_t start_webserver(void)
+    {
+        httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+        config.server_port = 80;
+        config.lru_purge_enable = true;
+
+        ESP_LOGI(TAG, "A iniciar webserver...");
+
+        httpd_handle_t server = NULL;
+        if (httpd_start(&server, &config) == ESP_OK)
+        {
+            httpd_uri_t index_page = {
+                .uri = "/",
+                .method = HTTP_GET,
+                .handler = index_handler,
+                .user_ctx = NULL
+            };
+            httpd_register_uri_handler(server, &index_page);
+
+            httpd_uri_t image_page = {
+                .uri = "/image",
+                .method = HTTP_GET,
+                .handler = image_handler,
+                .user_ctx = NULL
+            };
+            httpd_register_uri_handler(server, &image_page);
+
+            httpd_uri_t exposure_page = {
+                .uri = "/set_exposure",
+                .method = HTTP_GET,
+                .handler = exposure_handler,
+                .user_ctx = NULL
+            };
+            httpd_register_uri_handler(server, &exposure_page);
+
+            httpd_uri_t gain_page = {
+                .uri = "/set_gain",
+                .method = HTTP_GET,
+                .handler = gain_handler,
+                .user_ctx = NULL
+            };
+            httpd_register_uri_handler(server, &gain_page);
+
+            ESP_LOGI(TAG, "Webserver iniciado na porta 80");
+            buffer_ready = true;
+            return server;
+        }
+
+        ESP_LOGE(TAG, "Erro ao iniciar webserver");
+        return NULL;
+    }
 
 
-static esp_err_t index_handler(httpd_req_t *req)
-{
-    size_t index_html_size = index_html_end - index_html_start;
-
-    httpd_resp_set_type(req, "text/html");
-    httpd_resp_send(req, (const char *)index_html_start, index_html_size);
-
-    return ESP_OK;
-}
-
-static esp_err_t image_handler(httpd_req_t *req)
-{
-    httpd_resp_set_type(req, "application/octet-stream");
-    httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
-    httpd_resp_send(req, (char *)rx_psram_buffer, IMG_SIZE_BYTES);
-    return ESP_OK;
-}
-
-static esp_err_t exposure_handler(httpd_req_t *req)
-{
-    char buf[32];
-    int buf_len = httpd_req_get_url_query_len(req) + 1;
-
-    if (buf_len > sizeof(buf)) return ESP_FAIL;
-
-    if (httpd_req_get_url_query_str(req, buf, buf_len) == ESP_OK) {
-        char param[8];
-        if (httpd_query_key_value(buf, "value", param, sizeof(param)) == ESP_OK) {
-            int exposure = atoi(param);
-
-            ESP_LOGI("WEB", "Nova exposição: %d", exposure);
+    // ----------- TASK DO CORE 1 -----------
+    void core1_webserver(void *arg)
+    {
+        ESP_LOGI(TAG, "Core 1: a iniciar servidor web...");
+        start_webserver();
+        while (1) {
+            vTaskDelay(pdMS_TO_TICKS(1000));
         }
     }
 
-    httpd_resp_send(req, "OK", 2);
-    return ESP_OK;
-}
+#endif
 
-// --- Configuração e arranque do WebServer ---
-static httpd_handle_t start_webserver(void)
-{
-    httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    config.server_port = 80;
-    config.lru_purge_enable = true;
 
-    ESP_LOGI(TAG, "A iniciar webserver...");
+#if UPD_SENDER
 
-    httpd_handle_t server = NULL;
-    if (httpd_start(&server, &config) == ESP_OK)
-    {
-        httpd_uri_t index_page = {
-            .uri = "/",
-            .method = HTTP_GET,
-            .handler = index_handler,
-            .user_ctx = NULL
-        };
-        httpd_register_uri_handler(server, &index_page);
+    // Cria socket UDP
+    int udp_create_socket(struct sockaddr_in *dest_addr) {
+        int sock;
+        dest_addr->sin_family = AF_INET;
+        dest_addr->sin_port = htons(SERVER_PORT);
+        dest_addr->sin_addr.s_addr = inet_addr(SERVER_IP);
 
-        httpd_uri_t image_page = {
-            .uri = "/image",
-            .method = HTTP_GET,
-            .handler = image_handler,
-            .user_ctx = NULL
-        };
-        httpd_register_uri_handler(server, &image_page);
+        sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+        if (sock < 0) {
+            ESP_LOGE(TAG, "Erro ao criar socket UDP");
+            return -1;
+        }
 
-        httpd_uri_t exposure_page = {
-            .uri = "/set_exposure",
-            .method = HTTP_GET,
-            .handler = exposure_handler,
-            .user_ctx = NULL
-        };
-        httpd_register_uri_handler(server, &exposure_page);
-
-        ESP_LOGI(TAG, "Webserver iniciado na porta 80");
-        ready = true;
-
-        return server;
+        ESP_LOGI(TAG, "Socket UDP criado para %s:%d", SERVER_IP, SERVER_PORT);
+        return sock;
     }
 
-    ESP_LOGE(TAG, "Erro ao iniciar webserver");
-    return NULL;
-}
+    void core1_udp_loop(void *arg) {
 
-// ----------- TASK DO CORE 1 -----------
-void core1_webserver(void *arg)
-{
-    ESP_LOGI(TAG, "Core 1: a iniciar servidor web...");
-    start_webserver();
-    while (1) {
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        struct sockaddr_in dest_addr;
+        int sock = udp_create_socket(&dest_addr);
+        if (sock < 0) return;
+
+        buffer_ready = true;
+
+
+        int num_packets = 320;     
+        int raw_bytes_per_line = 492; // 328 pixels × 12 bits / 8
+        int i = 0;
+
+        while (1) {
+            while(i < num_packets){
+                memcpy(packet, &read_buffer[i * raw_bytes_per_line], raw_bytes_per_line);
+                packet[492]     = (uint8_t)(i & 0xFF);         // LSB
+                packet[493]     = (uint8_t)((i >> 8) & 0xFF);  // MSB
+                sendto(sock, packet, 494, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+                i++;
+            }
+            i =0;
+        }
     }
-}
 
+#endif
 
 void app_main(void) {
 
     ESP_LOGI(TAG, "Main running");
+    update_reg();
 
-    rx_psram_buffer = heap_caps_malloc(IMG_SIZE_BYTES, MALLOC_CAP_SPIRAM);
-    if (!rx_psram_buffer) {
-        ESP_LOGE("MAIN", "Falha ao alocar rx_psram_buffer (%d bytes)", IMG_SIZE_BYTES);
+
+    gpio_set_direction(GPIO_TOGGLE, GPIO_MODE_OUTPUT);
+    LDO_ON();
+
+    buffer_a = heap_caps_malloc(IMG_SIZE_BYTES, MALLOC_CAP_SPIRAM);
+    buffer_b = heap_caps_malloc(IMG_SIZE_BYTES, MALLOC_CAP_SPIRAM);
+
+
+    if (!buffer_a || !buffer_b) {
+        ESP_LOGE("MAIN", "Falha ao alocar buffers");
         return;
     }
-    tx_psram_buffer = heap_caps_malloc(IMG_SIZE_BYTES, MALLOC_CAP_SPIRAM);
-    if (!rx_psram_buffer) {
-        ESP_LOGE("MAIN", "Falha ao alocar tx_psram_buffer (%d bytes)", IMG_SIZE_BYTES);
-        return;
-    }
 
-    wifi_init();
-    xTaskCreatePinnedToCore(core0_spi_loop,  "core0_spi", 8192,(void *)rx_psram_buffer, 1, NULL, 0 );
-    xTaskCreatePinnedToCore(core1_webserver, "core1_webserver", 8192,(void *)tx_psram_buffer, 1, NULL, 1 );
+    write_buffer  = buffer_a;
+    read_buffer   = buffer_b;
+    
+    esp_task_wdt_deinit();
+    wifi_init_ap();
+
+    xTaskCreatePinnedToCore(core0_spi_loop,  "core0_spi", 8192,NULL, 1, NULL, 0 );
+    
+    #if WEBSERVER
+        xTaskCreatePinnedToCore(core1_webserver, "core1_webserver", 8192,NULL, 1, NULL, 1 );
+    #else
+        packet = heap_caps_malloc(494, MALLOC_CAP_SPIRAM);
+        xTaskCreatePinnedToCore(core1_udp_loop,  "core1_udp_loop" , 8192,NULL, 1, NULL, 1 );
+    #endif
 }
 

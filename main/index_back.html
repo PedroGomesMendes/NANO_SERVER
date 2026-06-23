@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset='UTF-8'>
+<title>NANEYE Viewer - Pro</title>
+<style>
+  body { background: #111; color: #eee; text-align: center; font-family: sans-serif; margin: 20px; }
+  canvas { border: 2px solid #444; background: #000; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+  .container { display: flex; align-items: flex-start; gap: 25px; justify-content: center; flex-wrap: wrap; }
+  .panel { background: #222; padding: 15px; border-radius: 8px; text-align: left; min-width: 300px; }
+  hr { border: 0; border-top: 1px solid #444; margin: 15px 0; }
+  label { display: block; margin-bottom: 5px; font-weight: bold; }
+  input[type="range"] { width: 100%; margin-bottom: 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { border: 1px solid #444; padding: 4px; text-align: left; }
+  th { background: #333; }
+  .highlight { color: #0af; }
+</style>
+</head>
+<body>
+
+<h2>NANEYE Viewer 🚀</h2>
+
+<div class="container">
+  
+
+
+  <div>
+    <canvas id="cam" width="328" height="320"></canvas>
+    <p id="fps_meter" style="font-family: monospace;">Waiting for data...</p>
+    <button id="btnCapture" style="padding: 10px 20px; cursor: pointer; background: #0af; border: none; color: white; border-radius: 5px; font-weight: bold;">
+    📸 Capture Snapshot
+    </button>
+  </div>
+
+  <div class="panel">
+    <label>Exposure: <span id="val" class="highlight">30</span></label>
+    <input type="range" id="sld" min="0" max="150" value="30">
+
+    <hr>
+
+    <label style="font-size:16px;">
+      <input type="checkbox" id="enablePipe" checked> 🛠️ Enable Image Pipeline
+    </label>
+
+    <div id="pipelineControls">
+      <label style="color: #0af; margin-top:10px;">
+        <input type="checkbox" id="enableDebayer"> 🌈 Enable Debayer (Color)
+      </label>
+      
+      <br>
+      
+      <label>Contrast: <span id="contrast_val" class="highlight">1.0</span></label>
+      <input type="range" id="contrast" min="0.5" max="3" step="0.1" value="1">
+
+      <label>Brightness: <span id="bright_val" class="highlight">0</span></label>
+      <input type="range" id="brightness" min="-100" max="100" value="0">
+
+      <label>Gamma: <span id="gamma_val" class="highlight">1.0</span></label>
+      <input type="range" id="gamma" min="0.3" max="2.5" step="0.1" value="1">
+    </div>
+
+    <hr>
+
+    <label style="font-size:16px;">
+      <input type="checkbox" id="enableControls" checked> ⚙️ Sensor Registers
+    </label>
+
+    <div id="controlsPanel">
+      <table>
+        <tr><th colspan="2">REG0 (Frame 0)</th></tr>
+        <tr><td>rows_in_reset</td><td><input type="range" id="r0_rows" min="0" max="160" value="150"><span id="r0_rows_val">150</span></td></tr>
+        <tr><td>vrst_pix</td><td><select id="r0_vrst"><option value="0">0</option><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option></select></td></tr>
+        <tr><td>ramp_gain</td><td><select id="r0_gain"><option value="0">0</option><option value="1" selected>1</option><option value="2">2</option><option value="3">3</option></select></td></tr>
+        <tr><td>offset_ramp</td><td><select id="r0_offset"><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3" selected>3</option></select></td></tr>
+        <tr><td>output_curr</td><td><select id="r0_curr"><option value="0">0</option><option value="1" selected>1</option><option value="2">2</option><option value="3">3</option></select></td></tr>
+        
+        <tr><th colspan="2">REG1 (Frame 1)</th></tr>
+        <tr><td>rows_delay</td><td><input type="range" id="r1_rows" min="0" max="63" value="0"><span id="r1_rows_val">0</span></td></tr>
+        <tr><td>bias_curr</td><td><input type="checkbox" id="r1_bias"></td></tr>
+        <tr><td>cds_gain</td><td><input type="checkbox" id="r1_cds"></td></tr>
+        <tr><td>output_mode</td><td><input type="checkbox" id="r1_out"></td></tr>
+        <tr><td>mclk_mode</td><td><select id="r1_mclk"><option value="0">0</option><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option></select></td></tr>
+        <tr><td>vref</td><td><select id="r1_vref"><option value="0">0</option><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option></select></td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+const W = 328, H = 320;
+let busy = false;
+let lastTime = performance.now();
+
+// Pipeline State
+let enablePipe = true;
+let enableDebayer = false;
+let contrast = 1.0;
+let brightness = 0;
+let gamma = 1.0;
+
+// --- UI EVENT LISTENERS ---
+const enablePipeCheckbox = document.getElementById('enablePipe');
+const pipelineDiv = document.getElementById('pipelineControls');
+
+enablePipeCheckbox.onchange = (e) => {
+    enablePipe = e.target.checked;
+    pipelineDiv.style.display = enablePipe ? 'block' : 'none';
+};
+
+// --- SNAPSHOT CAPTURE ---
+document.getElementById('btnCapture').onclick = () => {
+    const canvas = document.getElementById('cam');
+    
+    // Cria um link temporário para o download
+    const link = document.createElement('a');
+    
+    // Define o nome do arquivo com timestamp para não sobrepor
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    link.download = `naneye_capture_${timestamp}.png`;
+    
+    // Converte o conteúdo do canvas para uma URL de imagem
+    link.href = canvas.toDataURL("image/png");
+    
+    // Simula o clique para baixar
+    link.click();
+};
+
+document.getElementById('enableDebayer').onchange = (e) => enableDebayer = e.target.checked;
+document.getElementById('contrast').oninput = (e) => { contrast = parseFloat(e.target.value); document.getElementById('contrast_val').innerText = contrast; };
+document.getElementById('brightness').oninput = (e) => { brightness = parseInt(e.target.value); document.getElementById('bright_val').innerText = brightness; };
+document.getElementById('gamma').oninput = (e) => { gamma = parseFloat(e.target.value); document.getElementById('gamma_val').innerText = gamma; };
+
+// --- IMAGE PROCESSING LOGIC ---
+
+function applyPipeline(v) {
+    // Formula: ((x - 128) * contrast) + 128 + brightness
+    let res = (v - 128) * contrast + 128 + brightness;
+    // Gamma
+    if (gamma !== 1.0) res = 255 * Math.pow(Math.max(0, res) / 255, gamma);
+    return Math.max(0, Math.min(255, res));
+}
+
+function processImage(raw12) {
+    const imgData = new Uint8ClampedArray(W * H * 4);
+    const raw16 = new Uint16Array(W * H);
+    
+    // 1. Unpack Raw12 to Raw16 (Standard NanEye packing)
+    let ptr = 0;
+    for (let i = 0; i < raw12.length; i += 3) {
+        const b0 = raw12[i], b1 = raw12[i+1], b2 = raw12[i+2];
+        raw16[ptr++] = ((b0 << 4) | ((b1 & 0xF0) >> 4)) & 0x0FFF;
+        if (ptr < W * H) raw16[ptr++] = (((b1 & 0x0F) << 8) | b2) & 0x0FFF;
+    }
+
+    // 2. Loop through pixels for Debayer/Grayscale
+    for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+            const idx = y * W + x;
+            const outIdx = idx * 4;
+            let r, g, b;
+
+            if (enablePipe && enableDebayer) {
+                // Simple Bilinear Debayer (Assuming RGGB Pattern)
+                if (y % 2 === 0) {
+                    if (x % 2 === 0) { // R pixel
+                        r = raw16[idx];
+                        g = (raw16[idx + 1] || raw16[idx]) / 1; // Simplified G
+                        b = (raw16[idx + W + 1] || raw16[idx]);
+                    } else { // G pixel
+                        r = (raw16[idx - 1] || raw16[idx]);
+                        g = raw16[idx];
+                        b = (raw16[idx + W] || raw16[idx]);
+                    }
+                } else {
+                    if (x % 2 === 0) { // G pixel
+                        r = (raw16[idx - W] || raw16[idx]);
+                        g = raw16[idx];
+                        b = (raw16[idx + 1] || raw16[idx]);
+                    } else { // B pixel
+                        r = (raw16[idx - W - 1] || raw16[idx]);
+                        g = (raw16[idx - 1] || raw16[idx]);
+                        b = raw16[idx];
+                    }
+                }
+            } else {
+                // Grayscale / Bypass
+                r = g = b = raw16[idx];
+            }
+
+            // Convert 12-bit to 8-bit
+            r >>= 4; g >>= 4; b >>= 4;
+
+            if (enablePipe) {
+                imgData[outIdx]     = applyPipeline(r);
+                imgData[outIdx + 1] = applyPipeline(g);
+                imgData[outIdx + 2] = applyPipeline(b);
+            } else {
+                // PURE BYPASS: Raw 8-bit conversion only
+                imgData[outIdx] = imgData[outIdx+1] = imgData[outIdx+2] = r;
+            }
+            imgData[outIdx + 3] = 255; // Opacity
+        }
+    }
+    return imgData;
+}
+
+// --- FETCH & RENDER LOOP ---
+
+async function fetchFrame() {
+    if (busy) return;
+    busy = true;
+    try {
+        const res = await fetch('/image?t=' + Date.now());
+        const buffer = await res.arrayBuffer();
+        const raw8 = new Uint8Array(buffer);
+        
+        if (raw8.length > 0) {
+            const processed = processImage(raw8);
+            const canvas = document.getElementById('cam');
+            const ctx = canvas.getContext('2d');
+            const img = ctx.createImageData(W, H);
+            img.data.set(processed);
+            ctx.putImageData(img, 0, 0);
+            
+            // FPS Counter
+            const now = performance.now();
+            const fps = (1000 / (now - lastTime)).toFixed(1);
+            document.getElementById('fps_meter').innerText = `FPS: ${fps} | Resolution: ${W}x${H}`;
+            lastTime = now;
+        }
+    } catch (e) { console.error("Fetch error:", e); }
+    busy = false;
+}
+
+function loop() { fetchFrame(); requestAnimationFrame(loop); }
+loop();
+
+// --- SENSOR CONTROL HANDLERS (REG0/REG1) ---
+
+function debounce(fn, delay) {
+    let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), delay); };
+}
+
+const sendReg0 = debounce(() => {
+    const params = new URLSearchParams({
+        rows: document.getElementById('r0_rows').value,
+        vrst: document.getElementById('r0_vrst').value,
+        gain: document.getElementById('r0_gain').value,
+        offset: document.getElementById('r0_offset').value,
+        curr: document.getElementById('r0_curr').value
+    });
+    fetch('/set_reg0?' + params).catch(e => console.error(e));
+}, 150);
+
+const sendReg1 = debounce(() => {
+    const params = new URLSearchParams({
+        rows: document.getElementById('r1_rows').value,
+        bias: +document.getElementById('r1_bias').checked,
+        cds: +document.getElementById('r1_cds').checked,
+        out: +document.getElementById('r1_out').checked,
+        mclk: document.getElementById('r1_mclk').value,
+        vref: document.getElementById('r1_vref').value
+    });
+    fetch('/set_reg1?' + params).catch(e => console.error(e));
+}, 150);
+
+// Bind register inputs
+document.getElementById('r0_rows').oninput = (e) => { 
+    document.getElementById('r0_rows_val').innerText = e.target.value; 
+    sendReg0(); 
+};
+document.getElementById('r1_rows').oninput = (e) => { 
+    document.getElementById('r1_rows_val').innerText = e.target.value; 
+    sendReg1(); 
+};
+['r0_vrst', 'r0_gain', 'r0_offset', 'r0_curr'].forEach(id => document.getElementById(id).onchange = sendReg0);
+['r1_bias', 'r1_cds', 'r1_out', 'r1_mclk', 'r1_vref'].forEach(id => document.getElementById(id).onchange = sendReg1);
+
+// Exposure handler
+document.getElementById('sld').oninput = (e) => {
+    const val = e.target.value;
+    document.getElementById('val').innerText = val;
+    debounce(() => fetch('/set_exposure?value=' + val), 100)();
+};
+
+// Toggle Sensor Panel
+document.getElementById('enableControls').onchange = (e) => {
+    document.getElementById('controlsPanel').style.display = e.target.checked ? "block" : "none";
+};
+
+</script>
+</body>
+</html>

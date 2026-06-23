@@ -1,4 +1,4 @@
-# Install script for directory: C:/Users/pmed/esp/v5.5.2/esp-idf/components/esp_psram
+# Install script for directory: C:/esp/v5.5.3/esp-idf/components/esp_psram
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -34,16 +34,16 @@ endif()
 
 # Set path to fallback-tool for dependency-resolution.
 if(NOT DEFINED CMAKE_OBJDUMP)
-  set(CMAKE_OBJDUMP "C:/Users/pmed/esp-idf/tools/tools/xtensa-esp-elf/esp-14.2.0_20251107/xtensa-esp-elf/bin/xtensa-esp32s3-elf-objdump.exe")
+  set(CMAKE_OBJDUMP "C:/Espressif/tools/xtensa-esp-elf/esp-14.2.0_20251107/xtensa-esp-elf/bin/xtensa-esp32s3-elf-objdump.exe")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Users/pmed/Desktop/web/hello_world/build/esp-idf/esp_psram/device/cmake_install.cmake")
+  include("C:/Users/P.Mendes/Desktop/hello_world/build/esp-idf/esp_psram/device/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Users/pmed/Desktop/web/hello_world/build/esp-idf/esp_psram/xip_impl/cmake_install.cmake")
+  include("C:/Users/P.Mendes/Desktop/hello_world/build/esp-idf/esp_psram/xip_impl/cmake_install.cmake")
 endif()
 

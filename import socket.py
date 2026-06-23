@@ -20,13 +20,12 @@ def unpack_raw12_to_uint16(raw_line: bytes, width: int) -> np.ndarray:
         b1 = raw_line[j + 1]
         b2 = raw_line[j + 2]
 
-        # Formato RAW12 típico (MIPI/NV12)
-        p0 = (b1 & 0x0F) << 8 | b0
-        p1 = b2 << 4 | ((b1 & 0xF0) >> 4)
+        p0 = ((b0 << 3) & 0x3F8)  | (b1 >> 5)
+        p1 =  ((b1 << 7) & 0x380) | (b2 >> 1)
 
         # Ajusta o alinhamento correto aqui:
-        pixels[i] = p0 << 4       # << 2 costuma ser o correto para DVP/SPI
-        pixels[i + 1] = p1 << 4
+        pixels[i] = p0        # << 2 costuma ser o correto para DVP/SPI
+        pixels[i + 1] = p1 
 
         j += 3
 
@@ -38,7 +37,7 @@ def unpack_raw12_to_uint16(raw_line: bytes, width: int) -> np.ndarray:
 class ImageReceiver(QObject):
     new_frame = pyqtSignal(np.ndarray)
 
-    def __init__(self, port=5000):
+    def __init__(self, port=5001):
         super().__init__()
         self.port = port
         self.running = True
@@ -51,22 +50,16 @@ class ImageReceiver(QObject):
         print(f"Servidor UDP escutando na porta {self.port}")
 
         img = np.zeros((IMG_H, IMG_W), dtype=np.uint16)
-
+        i = 0
         while self.running:
-            data, _ = sock.recvfrom(UDP_PACKET_SIZE)
+            data, _ = sock.recvfrom(494)
 
-            if len(data) != UDP_PACKET_SIZE:
-                print(f"Tamanho inesperado: {len(data)}")
-                continue
+            LSB = data[492]
+            MSB = data[493]
 
-            raw_line = data[:-2]
-            line_index = int.from_bytes(data[-2:], "little")
+            line_index = MSB << 8 | LSB
+            img[line_index] = unpack_raw12_to_uint16(data[:492], IMG_W)
 
-            if 0 <= line_index < IMG_H:
-                img[line_index] = unpack_raw12_to_uint16(raw_line, IMG_W)
-
-            if line_index ==319:
-                    img.astype(np.uint16).tofile("frame.raw")
 
             # Envia frame parcial para interface (evita lag)
             self.new_frame.emit(img.copy())
@@ -85,7 +78,7 @@ def update_label(img: np.ndarray):
         IMG_W,
         IMG_H,
         IMG_W * 2,
-        QImage.Format.Format_Grayscale16
+        QImage.Format.Format_Grayscale8
     )
 
     label.setPixmap(QPixmap.fromImage(qimg))
@@ -102,7 +95,7 @@ if __name__ == "__main__":
     label.resize(IMG_W, IMG_H)
     label.show()
 
-    receiver = ImageReceiver(port=5000)
+    receiver = ImageReceiver(port=5001)
     receiver.new_frame.connect(update_label)
 
     sys.exit(app.exec())
