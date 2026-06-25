@@ -79,8 +79,8 @@ uint8_t *packet = NULL;
 
 #define  WEBSERVER  1
 #define  UPD_SENDER 0
-#define NUM_TRANS 20
-#define LINES_PER_TRANS 16
+#define  NUM_TRANS 20
+#define  LINES_PER_TRANS 16
 
 
 static const char *TAG = "SPI_UDP";
