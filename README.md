@@ -6,6 +6,12 @@ This project implements a high-speed image acquisition system for the **NANEYE2 
 
 The project demonstrates how the ESP32 can be used as a compact and low-cost image acquisition platform without requiring external FPGA or image processing hardware.
 
+
+<p align="center">
+  <img src="img1.jpeg" alt="Image 1" width="45%">
+  <img src="img2.jpeg" alt="Image 2" width="45%">
+</p>
+
 ---
 
 # Features
@@ -26,10 +32,7 @@ The project demonstrates how the ESP32 can be used as a compact and low-cost ima
 
 # Hardware Requirements
 
-* ESP32 (with PSRAM)
-* NANEYE2 image sensor
-* SPI connection
-* Power supply for the sensor
+* ESP32s3 (with PSRAM)
 * Wi-Fi capable device (PC, tablet or smartphone)
 
 ---
