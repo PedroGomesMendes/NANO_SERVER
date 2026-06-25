@@ -74,9 +74,6 @@ uint8_t *packet = NULL;
 #define WORDS_PER_LINE_BITS (IMG_W * BITS_PER_PIXEL)
 #define WORDS_PER_LINE ((WORDS_PER_LINE_BITS + WORD_BITS - 1) / WORD_BITS) // 246
 
-#define WIFI_SSID "NOS-3481"
-#define WIFI_PASS "WHPNSR9R"
-
 #define SERVER_IP  "192.168.4.2"
 #define SERVER_PORT 5001
 
@@ -95,36 +92,33 @@ uint16_t reg0_val;
 uint16_t reg1_val; 
 const uint32_t update_code = 0x9;
 
-uint32_t frame0 = 0x3A2D91;           //0x912D3A; 
-uint32_t frame1 = 0xCA0092;          // 0x920148; 
+uint32_t frame0 = 0x3A2D91;                 //0x912D3A; 
+uint32_t frame1 = 0xCA0092;                // 0x920148; 
 uint32_t temp_frame0 = 0x3A2D91;           //0x912D3A; 
-uint32_t temp_frame1 = 0xCA0092;          // 0x920148; 
+uint32_t temp_frame1 = 0xCA0092;           // 0x920148; 
 
 spi_transaction_t t;
 spi_transaction_t trans[NUM_TRANS];
 spi_transaction_t *ret_trans;
 
-int exposure = 150; // valor inicial de exposição (ajustável via web)
-int gain = 1;       // valor inicial de ganho (ajustável via web)
+int exposure = 150; // 
+int gain = 1;       // 
 
+// Function to build the value for register 0 based on the provided parameters
 uint16_t build_reg0_value(uint8_t rows_in_reset,uint8_t vrst_pix,uint8_t ramp_gain,uint8_t offset_ramp,uint8_t output_curr)
 {
 	uint16_t value = 0;
-
 	value |= ((rows_in_reset & ROWS_IN_RESET_MASK) << ROWS_IN_RESET_POS);
 	value |= ((vrst_pix & VRST_PIX_MASK) << VRST_PIX_POS);
 	value |= ((ramp_gain & RAMP_GAIN_MASK) << RAMP_GAIN_POS);
 	value |= ((offset_ramp & OFFSET_RAMP_MASK) << OFFSET_RAMP_POS);
 	value |= ((output_curr & OUTPUT_CURR_MASK) << OUTPUT_CURR_POS);
-
 	return value;
 }
-
-uint16_t build_reg1_value(uint8_t rows_delay,uint8_t bias_curr_increase,uint8_t cds_gain,uint8_t output_mode,
-                            uint8_t mclk_mode,uint8_t vref,uint8_t cvc_curr,uint8_t idle_mode,uint8_t high_speed)
+// Function to build the value for register 1 based on the provided parameters
+uint16_t build_reg1_value(uint8_t rows_delay,uint8_t bias_curr_increase,uint8_t cds_gain,uint8_t output_mode,uint8_t mclk_mode,uint8_t vref,uint8_t cvc_curr,uint8_t idle_mode,uint8_t high_speed)
 {
 	uint16_t value = 0;
-
 	value |= ((rows_delay & ROWS_DELAY_MASK) << ROWS_DELAY_POS);
 	value |= ((bias_curr_increase & BIAS_CURR_MASK) << BIAS_CURR_POS);
 	value |= ((cds_gain & CDS_GAIN_MASK) << CDS_GAIN_POS);
@@ -134,10 +128,10 @@ uint16_t build_reg1_value(uint8_t rows_delay,uint8_t bias_curr_increase,uint8_t 
 	value |= ((cvc_curr & CVC_CURR_MASK) << CVC_CURR_POS);
 	value |= ((idle_mode & IDLE_MODE_MASK) << IDLE_MODE_POS);
 	value |= ((high_speed & HIGH_SPEED_MASK) << HIGH_SPEED_POS);
-
 	return value;
 }
 
+// Function to turn on the LDO (Low Dropout Regulator)
 void LDO_ON() 
 {
     gpio_set_level(GPIO_TOGGLE, 0);
@@ -145,7 +139,7 @@ void LDO_ON()
     gpio_set_level(GPIO_TOGGLE, 1);
 }
 
-// Função SPI básica de envio
+// Function to send data over SPI
 esp_err_t spi_send_data(spi_device_handle_t handle, const uint8_t *data, size_t bits) {
     memset(&t, 0, sizeof(t));
     t.length = bits;
@@ -154,7 +148,7 @@ esp_err_t spi_send_data(spi_device_handle_t handle, const uint8_t *data, size_t 
     return spi_device_transmit(handle, &t);
 }
 
-// // Função SPI básica de leitura DMA
+// Function to read data over SPI using DMA
 esp_err_t spi_read_dma_bits(spi_device_handle_t handle, void *dest_addr, size_t bits) {
     memset(&t, 0, sizeof(t));
     t.length = bits;
@@ -164,19 +158,8 @@ esp_err_t spi_read_dma_bits(spi_device_handle_t handle, void *dest_addr, size_t 
     return spi_device_transmit(handle, &t);
 }
 
-// esp_err_t spi_read_dma_bits(spi_device_handle_t handle, void *dest_addr, size_t bits)
-// {
-//     memset(&t, 0, sizeof(t));
-//     t.length   = bits;
-//     t.rxlength = bits;
-//     t.rx_buffer = dest_addr;
-//     return spi_device_polling_transmit(handle, &t);
-// }
-
-esp_err_t spi_read_dma_bits_queue(spi_device_handle_t handle,
-                                  spi_transaction_t *t,
-                                  void *dest_addr,
-                                  size_t bits)
+// Function to queue a SPI read transaction using DMA
+esp_err_t spi_read_dma_bits_queue(spi_device_handle_t handle,spi_transaction_t *t,void *dest_addr,size_t bits)
 {
     memset(t, 0, sizeof(*t));
 
@@ -187,7 +170,7 @@ esp_err_t spi_read_dma_bits_queue(spi_device_handle_t handle,
     return spi_device_queue_trans(handle, t, portMAX_DELAY);
 }
 
-
+//Function to initialize the WiFi access point
 void wifi_init_ap(void)
 {
     ESP_ERROR_CHECK(nvs_flash_init());
@@ -235,14 +218,12 @@ void wifi_init_ap(void)
     ESP_LOGI("WIFI", "AP iniciado. SSID: %s", ap_config.ap.ssid);
 }
 
-
-
-// Core 0: faz SPI e preenche buffer
+//Core 0 task for SPI communication loop to NANEYE camera
 void core0_spi_loop(void *arg) {
     
     while(!buffer_ready);
 
-    ESP_LOGI(TAG, "A iniciar NANEYE...");
+    ESP_LOGI(TAG, "A init NANEYE...");
 
     spi_bus_config_t buscfg = {
         .miso_io_num = PIN_NUM_MOSI ,
@@ -269,7 +250,6 @@ void core0_spi_loop(void *arg) {
 
     esp_rom_delay_us(5000);
 
-
     tx_data[0] = 0x00;                                          
     spi_send_data(handle, tx_data, 1);
     spi_send_data(handle, (uint8_t*) &frame0, 24);
@@ -284,12 +264,9 @@ void core0_spi_loop(void *arg) {
     spi_send_data(handle, rx_data, 12 * (1312+329));
     int offset = 0;
 
-    for (offset = 0; offset < IMG_H; offset += 16) { 
-    spi_read_dma_bits(handle,write_buffer + (offset * 492),IMG_W * 12 * 16);   
-    }
+    for (offset = 0; offset < IMG_H; offset += 16) { spi_read_dma_bits(handle,write_buffer + (offset * 492),IMG_W * 12 * 16);} //READ 1st image and IGNORE
 
     spi_read_dma_bits(handle, rx_data, 12 * 8);
-
 
     while (1) 
     {
@@ -305,69 +282,10 @@ void core0_spi_loop(void *arg) {
             spi_read_dma_bits(handle, write_buffer + (offset * 492), (IMG_W * 12 * 16));
             offset +=16;
         }
-        //ESP_LOG_BUFFER_HEX(TAG, write_buffer, 32);
-
         uint8_t *tmp = write_buffer;
         write_buffer = read_buffer;
         read_buffer = tmp;
-
-
         spi_send_data(handle, rx_data, 12 * 8);
-
-        // int idx = 0;
-        // int queued = 0;
-
-        // int in_flight = 0;
-
-        // // 🔹 Pré-carregar pipeline
-        // while (in_flight < devcfg.queue_size && offset < IMG_H)
-        // {
-        //     spi_transaction_t *t_local = &trans[in_flight];
-        //     memset(t_local, 0, sizeof(*t_local));
-
-        //     t_local->length    = IMG_W * 12 * LINES_PER_TRANS;
-        //     t_local->rxlength  = t_local->length;
-        //     t_local->rx_buffer = write_buffer + (offset * 492);
-
-        //     ESP_ERROR_CHECK(spi_device_queue_trans(handle, t_local, portMAX_DELAY));
-
-        //     offset += LINES_PER_TRANS;
-        //     in_flight++;
-        // }
-
-        // // 🔁 Loop contínuo (DMA circular fake)
-        // while (offset < IMG_H)
-        // {
-        //     ESP_ERROR_CHECK(
-        //         spi_device_get_trans_result(handle, &ret_trans, portMAX_DELAY)
-        //     );
-
-        //     in_flight--;
-
-        //     // reutiliza descriptor (CRÍTICO)
-        //     memset(ret_trans, 0, sizeof(*ret_trans));
-
-        //     ret_trans->length    = IMG_W * 12 * LINES_PER_TRANS;
-        //     ret_trans->rxlength  = ret_trans->length;
-        //     ret_trans->rx_buffer = write_buffer + (offset * 492);
-
-        //     ESP_ERROR_CHECK(
-        //         spi_device_queue_trans(handle, ret_trans, portMAX_DELAY)
-        //     );
-
-        //     offset += LINES_PER_TRANS;
-        //     in_flight++;
-        // }
-
-        // // 🔹 drenar resto
-        // while (in_flight > 0)
-        // {
-        //     ESP_ERROR_CHECK(
-        //         spi_device_get_trans_result(handle, &ret_trans, portMAX_DELAY)
-        //     );
-        //     in_flight--;
-        // }
-
     }
 }
 
@@ -375,8 +293,6 @@ void core0_spi_loop(void *arg) {
 
     extern const uint8_t index_html_start[] asm("_binary_index_html_start");
     extern const uint8_t index_html_end[]   asm("_binary_index_html_end");
-
-
     static esp_err_t index_handler(httpd_req_t *req)
     {
         size_t index_html_size = index_html_end - index_html_start;
@@ -387,6 +303,7 @@ void core0_spi_loop(void *arg) {
         return ESP_OK;
     }
 
+    //Function to handle HTTP requests for serving the image data
     static esp_err_t image_handler(httpd_req_t *req)
     {
         httpd_resp_set_type(req, "application/octet-stream");
@@ -398,6 +315,7 @@ void core0_spi_loop(void *arg) {
         return ESP_OK;
     }
 
+    //Function to update the camera registers based on the current exposure and gain values
     int update_reg() {
         reg0_val = build_reg0_value(
         exposure &0xFF  ,// rows_in_reset
@@ -432,6 +350,7 @@ void core0_spi_loop(void *arg) {
         return 0;
     }
 
+    //Gain handler function to handle HTTP requests for setting the gain value
     static esp_err_t gain_handler(httpd_req_t *req)
     {
         char buf[32];
@@ -451,6 +370,7 @@ void core0_spi_loop(void *arg) {
         return ESP_OK;
     }
 
+    //Exposure handler function to handle HTTP requests for setting the exposure value
     static esp_err_t exposure_handler(httpd_req_t *req)
     {
         char buf[32];
@@ -470,14 +390,14 @@ void core0_spi_loop(void *arg) {
         return ESP_OK;
     }
 
-    // --- Configuração e arranque do WebServer ---
+    // Function to start the web server and register URI handlers
     static httpd_handle_t start_webserver(void)
     {
         httpd_config_t config = HTTPD_DEFAULT_CONFIG();
         config.server_port = 80;
         config.lru_purge_enable = true;
 
-        ESP_LOGI(TAG, "A iniciar webserver...");
+        ESP_LOGI(TAG, "Init webserver...");
 
         httpd_handle_t server = NULL;
         if (httpd_start(&server, &config) == ESP_OK)
@@ -523,11 +443,10 @@ void core0_spi_loop(void *arg) {
         return NULL;
     }
 
-
-    // ----------- TASK DO CORE 1 -----------
+    // Core 1 task for running the web server
     void core1_webserver(void *arg)
     {
-        ESP_LOGI(TAG, "Core 1: a iniciar servidor web...");
+        ESP_LOGI(TAG, "Core 1: INIT WEBSERVER...");
         start_webserver();
         while (1) {
             vTaskDelay(pdMS_TO_TICKS(1000));
@@ -536,10 +455,8 @@ void core0_spi_loop(void *arg) {
 
 #endif
 
-
 #if UPD_SENDER
 
-    // Cria socket UDP
     int udp_create_socket(struct sockaddr_in *dest_addr) {
         int sock;
         dest_addr->sin_family = AF_INET;
@@ -583,21 +500,19 @@ void core0_spi_loop(void *arg) {
 
 #endif
 
+
+//Main application entry point
 void app_main(void) {
 
-    ESP_LOGI(TAG, "Main running");
     update_reg();
-
-
     gpio_set_direction(GPIO_TOGGLE, GPIO_MODE_OUTPUT);
     LDO_ON();
 
     buffer_a = heap_caps_malloc(IMG_SIZE_BYTES, MALLOC_CAP_SPIRAM);
     buffer_b = heap_caps_malloc(IMG_SIZE_BYTES, MALLOC_CAP_SPIRAM);
 
-
     if (!buffer_a || !buffer_b) {
-        ESP_LOGE("MAIN", "Falha ao alocar buffers");
+        ESP_LOGE("MAIN", "Failed to allocate buffers");
         return;
     }
 
