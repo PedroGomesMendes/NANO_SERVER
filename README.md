@@ -1,43 +1,38 @@
-# NANEYE2 ESP32 Image Capture Server
-
-## Overview
-
-This project implements a high-speed image acquisition system for the **NANEYE2 CMOS image sensor** using an **ESP32**. The firmware configures the image sensor over SPI, continuously captures 12-bit RAW images using DMA, stores frames in PSRAM with double buffering, and streams the captured images through either an embedded HTTP server or UDP.
-
-The project demonstrates how the ESP32 can be used as a compact and low-cost image acquisition platform without requiring external FPGA or image processing hardware.
-
+# ams OSRAM NANOSERVER NANEYE ESP32s3
 
 <p align="center">
   <img src="img1.jpeg" alt="Image 1" width="45%">
-  <img src="img2.jpeg" alt="Image 2" width="45%">
 </p>
 
----
+## Overview
 
-# Features
+High-speed image acquisition firmware for the **ams OSRAM NANEYE** sensor on **ESP32-S3**.
 
-* High-speed SPI communication (31 MHz)
-* Continuous DMA image acquisition
-* Double-buffered image capture using PSRAM
+The application configures the sensor over SPI, captures 12-bit RAW frames via DMA, stores them in PSRAM using double buffering, and serves them through an embedded HTTP interface or UDP.
+
+
+
+## Features
+
+* 328×320 RAW 12-bit image capture
+* SPI3 at 31 MHz with DMA
+* Double-buffered PSRAM frame storage
 * Embedded Wi-Fi Access Point
-* Embedded HTTP server for image streaming
-* Optional UDP image transmission
-* Runtime exposure control
-* Runtime analog gain control
-* Multi-core processing
-* Low memory overhead
-* RAW 12-bit image acquisition
+* HTTP image streaming with live sensor controls    
+* Optional UDP output mode
+* Runtime exposure and gain control
+* Dual-core task separation
 
 ---
 
-# Hardware Requirements
+## Hardware
 
-* ESP32s3 (with PSRAM)
-* Wi-Fi capable device (PC, tablet or smartphone)
+* ESP32-S3 with PSRAM
+* Wi-Fi capable client device (PC, tablet, smartphone)
 
 ---
 
-# Image Specifications
+## Sensor Details
 
 | Parameter        | Value            |
 | ---------------- | ---------------- |
@@ -48,160 +43,109 @@ The project demonstrates how the ESP32 can be used as a compact and low-cost ima
 
 ---
 
-# Software Architecture
+## Architecture
 
-The application is divided into two independent tasks running on separate ESP32 cores.
+The firmware splits work between two cores:
 
-## Core 0
+### Core 0
 
-Responsible for:
+* Initialize SPI and DMA
+* Configure the NANEYE sensor
+* Capture frames into PSRAM
+* Swap active read/write buffers
 
-* Initializing the SPI peripheral
-* Configuring the image sensor
-* Capturing image frames using DMA
-* Swapping frame buffers
+### Core 1
 
-## Core 1
-
-Responsible for:
-
-* Starting the Wi-Fi Access Point
-* Running the HTTP server
-* Serving captured images
-* Handling exposure and gain requests
-
-When UDP mode is enabled, Core 1 continuously transmits the image over UDP instead of serving it through HTTP.
+* Start Wi-Fi AP
+* Run embedded HTTP server
+* Serve image and control requests
+* Optionally transmit UDP packets
 
 ---
 
-# Memory Architecture
+## PSRAM Double Buffering
 
 Two frame buffers are allocated in PSRAM:
 
-```
-Buffer A  <-- SPI DMA writes here
-Buffer B  <-- HTTP server reads here
-```
+* `Buffer A` — DMA writes current frame
+* `Buffer B` — HTTP/UDP reads last complete frame
 
-After every frame acquisition:
-
-```
-write_buffer <--> read_buffer
-```
-
-This prevents tearing while allowing continuous acquisition.
+After each frame completion, the buffers swap roles, preventing tearing and keeping capture continuous.
 
 ---
 
-# Wi-Fi Configuration
+## Connect to the ESP
 
-The ESP32 creates its own wireless network.
+1. Join the Wi-Fi network created by the ESP32.
+2. Use the default credentials:
+   * SSID: `NANEYE_CAM`
+   * Password: `12345678`
+3. Open your browser and go to:
+   * `http://192.168.1.4`
 
-Default configuration:
-
-```
-SSID: NANEYE_CAM
-Password: 12345678
-```
-
-The firmware operates in Access Point mode.
-
----
-
-# HTTP Endpoints
-
-## Root Page
-
-```
-GET /
-```
-
-Serves the embedded HTML interface.
+<p align="center">
+  <img src="img2.jpeg" alt="Rubik's cube connection illustration" width="60%">
+</p>
 
 ---
 
-## Image Endpoint
+## Web Interface Flow
 
-```
-GET /image
-```
+`index.html` is the browser interface served by the ESP32. It:
 
-Returns the latest captured RAW frame.
+1. Loads the page from `/`
+2. Requests `/image` for the latest RAW frame
+3. Sends `/set_exposure?value=` to update exposure
+4. Sends `/set_gain?value=` to update analog gain
 
-Content-Type:
+### index.html flow diagram
 
-```
-application/octet-stream
+```mermaid
+flowchart LR
+  A[Browser] -->|GET /| B[index.html]
+  B -->|GET /image| C[ESP32 HTTP Server]
+  C -->|RAW frame| B
+  B -->|GET /set_exposure| C
+  B -->|GET /set_gain| C
+  C -->|SPI commands| D[NANEYE sensor]
+  D -->|pixel data| E[DMA]
+  E -->|write frame| F[PSRAM buffer]
+  C -->|serve image| F
 ```
 
 ---
 
-## Exposure Control
+## HTTP Endpoints
 
-```
-GET /set_exposure?value=<0-255>
-```
-
-Updates the sensor exposure.
-
-Example:
-
-```
-/set_exposure?value=150
-```
+* `GET /` — serve `index.html`
+* `GET /image` — return latest RAW frame (`application/octet-stream`)
+* `GET /set_exposure?value=<0-255>` — update exposure
+* `GET /set_gain?value=<0-3>` — update analog gain
 
 ---
 
-## Gain Control
+## UDP Mode
 
-```
-GET /set_gain?value=<0-3>
-```
-
-Updates the sensor analog gain.
-
-Example:
-
-```
-/set_gain?value=2
-```
-
----
-
-# UDP Mode
-
-If enabled:
+Enable UDP mode by setting:
 
 ```c
 #define WEBSERVER 0
 #define UPD_SENDER 1
 ```
 
-Frames are transmitted line-by-line using UDP packets.
+In UDP mode, the firmware sends lines in 494-byte packets:
 
-Packet format:
+* 492 bytes RAW image data
+* 2 bytes line number
 
-```
-492 bytes  RAW image data
-2 bytes    Line number
-```
+Default destination:
 
-Packet size:
-
-```
-494 bytes
-```
-
-Destination:
-
-```
-IP: 192.168.4.2
-Port: 5001
-```
+* IP: `192.168.4.2`
+* Port: `5001`
 
 ---
 
-# SPI Configuration
+## SPI Configuration
 
 | Parameter | Value   |
 | --------- | ------- |
@@ -212,43 +156,27 @@ Port: 5001
 
 ---
 
-# Sensor Configuration
+## Sensor Configuration
 
-The firmware dynamically generates the NANEYE configuration registers.
-
-Supported runtime parameters include:
-
-* Exposure
-* Ramp Gain
-* Analog Gain
-* Offset Ramp
-* Output Current
-* Bias Current
-* VREF
-* High Speed Mode
-* Idle Mode
-
-Configuration frames are generated before every image acquisition.
+The firmware generates NANEYE register settings at runtime. Supported controls include exposure, ramp gain, analog gain, offset ramp, output current, bias current, VREF, high-speed mode, and idle mode.
 
 ---
 
-# Performance
+## Build
 
-The project is optimized for continuous image acquisition using:
+Using ESP-IDF:
 
-* DMA transfers
-* Double buffering
-* Multi-core execution
-* PSRAM storage
-* Minimal CPU overhead
-
-The CPU performs almost no processing on image data.
-
----
-
-# Project Structure
-
+```bash
+idf.py set-target esp32
+idf.py build
+idf.py flash monitor
 ```
+
+---
+
+## Project Structure
+
+```text
 .
 ├── main
 │   ├── main.c
@@ -261,42 +189,8 @@ The CPU performs almost no processing on image data.
 
 ---
 
-# Build
 
-Using ESP-IDF:
-
-```bash
-idf.py set-target esp32
-
-idf.py build
-
-idf.py flash monitor
-```
-
----
-
-# Future Improvements
-
-* JPEG compression
-* MJPEG streaming
-* WebSocket streaming
-* Live image preview
-* Auto Exposure
-* Auto Gain Control
-* Image processing
-* Frame rate statistics
-* Sensor register GUI
-* OTA firmware updates
-
----
-
-# License
-
-This project is released under the MIT License.
-
----
-
-# Author
+## Author
 
 Pedro Mendes
 
