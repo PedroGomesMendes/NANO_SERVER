@@ -1,53 +1,300 @@
-| Supported Targets | ESP32 | ESP32-C2 | ESP32-C3 | ESP32-C5 | ESP32-C6 | ESP32-C61 | ESP32-H2 | ESP32-H21 | ESP32-H4 | ESP32-P4 | ESP32-S2 | ESP32-S3 | Linux |
-| ----------------- | ----- | -------- | -------- | -------- | -------- | --------- | -------- | --------- | -------- | -------- | -------- | -------- | ----- |
+# NANEYE2 ESP32 Image Capture Server
 
-# Hello World Example
+## Overview
 
-Starts a FreeRTOS task to print "Hello World".
+This project implements a high-speed image acquisition system for the **NANEYE2 CMOS image sensor** using an **ESP32**. The firmware configures the image sensor over SPI, continuously captures 12-bit RAW images using DMA, stores frames in PSRAM with double buffering, and streams the captured images through either an embedded HTTP server or UDP.
 
-(See the README.md file in the upper level 'examples' directory for more information about examples.)
+The project demonstrates how the ESP32 can be used as a compact and low-cost image acquisition platform without requiring external FPGA or image processing hardware.
 
-## How to use example
+---
 
-Follow detailed instructions provided specifically for this example.
+# Features
 
-Select the instructions depending on Espressif chip installed on your development board:
+* High-speed SPI communication (31 MHz)
+* Continuous DMA image acquisition
+* Double-buffered image capture using PSRAM
+* Embedded Wi-Fi Access Point
+* Embedded HTTP server for image streaming
+* Optional UDP image transmission
+* Runtime exposure control
+* Runtime analog gain control
+* Multi-core processing
+* Low memory overhead
+* RAW 12-bit image acquisition
 
-- [ESP32 Getting Started Guide](https://docs.espressif.com/projects/esp-idf/en/stable/get-started/index.html)
-- [ESP32-S2 Getting Started Guide](https://docs.espressif.com/projects/esp-idf/en/latest/esp32s2/get-started/index.html)
+---
 
+# Hardware Requirements
 
-## Example folder contents
+* ESP32 (with PSRAM)
+* NANEYE2 image sensor
+* SPI connection
+* Power supply for the sensor
+* Wi-Fi capable device (PC, tablet or smartphone)
 
-The project **hello_world** contains one source file in C language [hello_world_main.c](main/hello_world_main.c). The file is located in folder [main](main).
+---
 
-ESP-IDF projects are built using CMake. The project build configuration is contained in `CMakeLists.txt` files that provide set of directives and instructions describing the project's source files and targets (executable, library, or both).
+# Image Specifications
 
-Below is short explanation of remaining files in the project folder.
+| Parameter        | Value            |
+| ---------------- | ---------------- |
+| Resolution       | 328 × 320 pixels |
+| Pixel Format     | RAW 12-bit       |
+| Bytes per Line   | 492 bytes        |
+| Total Image Size | 157,440 bytes    |
+
+---
+
+# Software Architecture
+
+The application is divided into two independent tasks running on separate ESP32 cores.
+
+## Core 0
+
+Responsible for:
+
+* Initializing the SPI peripheral
+* Configuring the image sensor
+* Capturing image frames using DMA
+* Swapping frame buffers
+
+## Core 1
+
+Responsible for:
+
+* Starting the Wi-Fi Access Point
+* Running the HTTP server
+* Serving captured images
+* Handling exposure and gain requests
+
+When UDP mode is enabled, Core 1 continuously transmits the image over UDP instead of serving it through HTTP.
+
+---
+
+# Memory Architecture
+
+Two frame buffers are allocated in PSRAM:
 
 ```
-├── CMakeLists.txt
-├── pytest_hello_world.py      Python script used for automated testing
+Buffer A  <-- SPI DMA writes here
+Buffer B  <-- HTTP server reads here
+```
+
+After every frame acquisition:
+
+```
+write_buffer <--> read_buffer
+```
+
+This prevents tearing while allowing continuous acquisition.
+
+---
+
+# Wi-Fi Configuration
+
+The ESP32 creates its own wireless network.
+
+Default configuration:
+
+```
+SSID: NANEYE_CAM
+Password: 12345678
+```
+
+The firmware operates in Access Point mode.
+
+---
+
+# HTTP Endpoints
+
+## Root Page
+
+```
+GET /
+```
+
+Serves the embedded HTML interface.
+
+---
+
+## Image Endpoint
+
+```
+GET /image
+```
+
+Returns the latest captured RAW frame.
+
+Content-Type:
+
+```
+application/octet-stream
+```
+
+---
+
+## Exposure Control
+
+```
+GET /set_exposure?value=<0-255>
+```
+
+Updates the sensor exposure.
+
+Example:
+
+```
+/set_exposure?value=150
+```
+
+---
+
+## Gain Control
+
+```
+GET /set_gain?value=<0-3>
+```
+
+Updates the sensor analog gain.
+
+Example:
+
+```
+/set_gain?value=2
+```
+
+---
+
+# UDP Mode
+
+If enabled:
+
+```c
+#define WEBSERVER 0
+#define UPD_SENDER 1
+```
+
+Frames are transmitted line-by-line using UDP packets.
+
+Packet format:
+
+```
+492 bytes  RAW image data
+2 bytes    Line number
+```
+
+Packet size:
+
+```
+494 bytes
+```
+
+Destination:
+
+```
+IP: 192.168.4.2
+Port: 5001
+```
+
+---
+
+# SPI Configuration
+
+| Parameter | Value   |
+| --------- | ------- |
+| SPI Host  | SPI3    |
+| Clock     | 31 MHz  |
+| DMA       | Enabled |
+| SPI Mode  | Mode 0  |
+
+---
+
+# Sensor Configuration
+
+The firmware dynamically generates the NANEYE configuration registers.
+
+Supported runtime parameters include:
+
+* Exposure
+* Ramp Gain
+* Analog Gain
+* Offset Ramp
+* Output Current
+* Bias Current
+* VREF
+* High Speed Mode
+* Idle Mode
+
+Configuration frames are generated before every image acquisition.
+
+---
+
+# Performance
+
+The project is optimized for continuous image acquisition using:
+
+* DMA transfers
+* Double buffering
+* Multi-core execution
+* PSRAM storage
+* Minimal CPU overhead
+
+The CPU performs almost no processing on image data.
+
+---
+
+# Project Structure
+
+```
+.
 ├── main
-│   ├── CMakeLists.txt
-│   └── hello_world_main.c
-└── README.md                  This is the file you are currently reading
+│   ├── main.c
+│   ├── index.html
+│   └── ...
+├── CMakeLists.txt
+├── sdkconfig
+└── README.md
 ```
 
-For more information on structure and contents of ESP-IDF projects, please refer to Section [Build System](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-guides/build-system.html) of the ESP-IDF Programming Guide.
+---
 
-## Troubleshooting
+# Build
 
-* Program upload failure
+Using ESP-IDF:
 
-    * Hardware connection is not correct: run `idf.py -p PORT monitor`, and reboot your board to see if there are any output logs.
-    * The baud rate for downloading is too high: lower your baud rate in the `menuconfig` menu, and try again.
+```bash
+idf.py set-target esp32
 
-## Technical support and feedback
+idf.py build
 
-Please use the following feedback channels:
+idf.py flash monitor
+```
 
-* For technical queries, go to the [esp32.com](https://esp32.com/) forum
-* For a feature request or bug report, create a [GitHub issue](https://github.com/espressif/esp-idf/issues)
+---
 
-We will get back to you as soon as possible.
+# Future Improvements
+
+* JPEG compression
+* MJPEG streaming
+* WebSocket streaming
+* Live image preview
+* Auto Exposure
+* Auto Gain Control
+* Image processing
+* Frame rate statistics
+* Sensor register GUI
+* OTA firmware updates
+
+---
+
+# License
+
+This project is released under the MIT License.
+
+---
+
+# Author
+
+Pedro Mendes
+
+pedro.mendes@ams-osram.com
