@@ -39,8 +39,8 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for each subdirectory.
-  include("C:/Users/P.Mendes/Desktop/hello_world/build/esp-idf/mbedtls/mbedtls/3rdparty/everest/cmake_install.cmake")
-  include("C:/Users/P.Mendes/Desktop/hello_world/build/esp-idf/mbedtls/mbedtls/3rdparty/p256-m/cmake_install.cmake")
+  include("C:/Users/P.Mendes/Desktop/NANO_SERVER/build/esp-idf/mbedtls/mbedtls/3rdparty/everest/cmake_install.cmake")
+  include("C:/Users/P.Mendes/Desktop/NANO_SERVER/build/esp-idf/mbedtls/mbedtls/3rdparty/p256-m/cmake_install.cmake")
 
 endif()
 

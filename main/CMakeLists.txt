@@ -1,4 +1,4 @@
-idf_component_register( SRCS "hello_world_main.c"
+idf_component_register( SRCS "NANOSERVER.c"
                         PRIV_REQUIRES spi_flash
                         REQUIRES esp_wifi
                         REQUIRES nvs_flash

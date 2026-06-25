@@ -1,4 +1,4 @@
-# Install script for directory: C:/Users/P.Mendes/Desktop/hello_world/main
+# Install script for directory: C:/Users/P.Mendes/Desktop/NANO_SERVER/main
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)

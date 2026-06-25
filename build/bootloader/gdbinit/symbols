@@ -17,4 +17,4 @@ set confirm off
 set confirm on
 
 # Load application symbols
-file C:/Users/P.Mendes/Desktop/hello_world/build/bootloader/bootloader.elf
+file C:/Users/P.Mendes/Desktop/NANO_SERVER/build/bootloader/bootloader.elf

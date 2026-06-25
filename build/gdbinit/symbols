@@ -13,8 +13,8 @@ end
 
 # Load bootloader symbols
 set confirm off
-    add-symbol-file C:/Users/P.Mendes/Desktop/hello_world/build/bootloader/bootloader.elf
+    add-symbol-file C:/Users/P.Mendes/Desktop/NANO_SERVER/build/bootloader/bootloader.elf
 set confirm on
 
 # Load application symbols
-file C:/Users/P.Mendes/Desktop/hello_world/build/hello_world.elf
+file C:/Users/P.Mendes/Desktop/NANO_SERVER/build/hello_world.elf
