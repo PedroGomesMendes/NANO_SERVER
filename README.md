@@ -1,11 +1,12 @@
-# NANOSERVER 
-# RAW image streaming using a ams OSRAM NANEYE with ESP32s3
+# NANOSERVER
+
+**RAW image streaming with the ams OSRAM NANEYE on ESP32-S3**
 
 ## Overview
 
-Image acquisition firmware for the **ams OSRAM NANEYE** sensor on **ESP32-S3**.
+NANOSERVER is firmware for the ESP32-S3 that controls the ams OSRAM NANEYE image sensor, captures 12-bit RAW frames, and streams them over Wi-Fi.
 
-The application configures the sensor over SPI, captures 12-bit RAW frames via DMA, stores them in PSRAM using double buffering, and serves them through an embedded HTTP interface or UDP.
+The ESP32 configures the sensor via SPI, uses DMA to acquire frames, stores images in PSRAM with double buffering, and provides output through an embedded HTTP server or optional UDP stream.
 
 <p align="center">
   <img src="img1.jpeg" alt="Image 1" width="45%">
@@ -16,18 +17,51 @@ The application configures the sensor over SPI, captures 12-bit RAW frames via D
 * 328×320 RAW 12-bit image capture
 * SPI3 at 31 MHz with DMA
 * Double-buffered PSRAM frame storage
-* Embedded Wi-Fi Access Point
-* HTTP image streaming with live sensor controls    
-* Optional UDP output mode
+* Built-in Wi-Fi Access Point
+* Embedded HTTP interface for live image delivery
+* Optional UDP frame output
 * Runtime exposure and gain control
-* Dual-core task separation
+* Dual-core task separation for capture and networking
 
 ---
 
 ## Hardware
 
 * ESP32-S3 with PSRAM
-* Wi-Fi capable client device (PC, tablet, smartphone)
+
+<p align="center">
+  <img src="ESP32S3.jpg" alt="ESP32S3 board" width="60%">
+</p>
+
+### NANEYE wiring diagram
+
+The NANEYE sensor has only the following signal pins:
+* `DATA`
+* `CLK`
+* `VCC`
+* `GND`
+
+More details are available on the ams OSRAM product page: [ams NANEYE2D miniature camera module](https://ams-osram.com/products/sensor-solutions/cmos-image-sensors/ams-naneye2d-miniature-camera-module)
+
+The ESP32 uses a shared data line for the sensor.
+A 1 kΩ series resistor is placed outside the ESP32 board on the MOSI output path.
+
+* `ESP32 MOSI` -> 1 kΩ resistor -> `NANEYE DATA`
+* `ESP32 MISO` -> `NANEYE DATA`
+* `ESP32 CLK` -> `NANEYE CLK`
+* `3.3V` -> `NANEYE VCC`
+* `GND` -> `NANEYE GND`
+
+
+<p align="center">
+  <img src="SCH1.jpeg" alt="ESP32S3 to NANEYE wiring" width="75%">
+</p>
+
+The NANEYE module is powered through an external LDO. The LDO enable signal is driven by GPIO 14 on the ESP32-S3 (`GPIO_TOGGLE` in `main/NANOSERVER.c`).
+
+<p align="center">
+  <img src="SCH2.JPEG" alt="NANEYE LDO power enable wiring" width="75%">
+</p>
 
 ---
 
@@ -35,10 +69,10 @@ The application configures the sensor over SPI, captures 12-bit RAW frames via D
 
 | Parameter        | Value            |
 | ---------------- | ---------------- |
-| Resolution       | 328 × 320 pixels |
+| Resolution       | 320 × 320 pixels |
 | Pixel Format     | RAW 12-bit       |
-| Bytes per Line   | 492 bytes        |
-| Total Image Size | 157,440 bytes    |
+| Bytes per Line   | 480 bytes        |
+| Total Image Size | 153,600 bytes    |
 
 ---
 
@@ -72,7 +106,9 @@ Two frame buffers are allocated in PSRAM:
 After each frame completion, the buffers swap roles, preventing tearing and keeping capture continuous.
 
 ---
-<iframe frameborder="0" width="375" height="365" scrolling="no" src="https://circuitmaker.com/Projects/6BFFED39-F093-4A0D-BEF9-0643B47B38B2/embeded"></iframe>
+
+
+[Open the CircuitMaker project](https://circuitmaker.com/Projects/6BFFED39-F093-4A0D-BEF9-0643B47B38B2)
 
 ## Connect to the ESP
 
@@ -84,33 +120,54 @@ After each frame completion, the buffers swap roles, preventing tearing and keep
    * `http://192.168.1.4`
 
 <p align="center">
-  <img src="img2.jpeg" alt="Rubik's cube connection illustration" width="60%">
+  <img src="img3.jpeg" alt="Rubik's cube connection illustration" width="60%">
 </p>
 
 ---
 
-## Web Interface Flow
+## ESP32 Firmware Flow
 
-`index.html` is the browser interface served by the ESP32. It:
+The firmware runs two independent tasks on the ESP32:
 
-1. Loads the page from `/`
-2. Requests `/image` for the latest RAW frame
-3. Sends `/set_exposure?value=` to update exposure
-4. Sends `/set_gain?value=` to update analog gain
+### Core 0: image capture
 
-### index.html flow diagram
+```text
+app_main()
+  -> init GPIO toggle for LDO
+  -> allocate PSRAM frame buffers
+  -> start core0_spi_loop()
 
-```mermaid
-flowchart LR
-  A[Browser] -->|GET /| B[index.html]
-  B -->|GET /image| C[ESP32 HTTP Server]
-  C -->|RAW frame| B
-  B -->|GET /set_exposure| C
-  B -->|GET /set_gain| C
-  C -->|SPI commands| D[NANEYE sensor]
-  D -->|pixel data| E[DMA]
-  E -->|write frame| F[PSRAM buffer]
-  C -->|serve image| F
+core0_spi_loop()
+  -> initialize SPI bus and sensor device
+  -> send configuration frames to NANEYE
+  -> read first frame to prime the pipeline
+  -> loop forever:
+       read one full frame by DMA
+       swap write/read buffer pointers
+       repeat
+```
+
+### Core 1: networking and control
+
+```text
+app_main()
+  -> initialize Wi-Fi Access Point
+  -> start core1_webserver()
+
+core1_webserver()
+  -> start HTTP server on port 80
+  -> serve / and /image
+  -> handle /set_exposure and /set_gain
+  -> expose the latest frame from PSRAM
+```
+
+### Shared behavior
+
+```text
+PSRAM buffer A <-> PSRAM buffer B
+DMA writer fills one buffer
+HTTP server reads the other buffer
+After each frame, the roles are swapped
 ```
 
 ---
