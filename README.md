@@ -1,16 +1,15 @@
-# ams OSRAM NANOSERVER NANEYE ESP32s3
+# NANOSERVER 
+# RAW image streaming using a ams OSRAM NANEYE with ESP32s3
+
+## Overview
+
+Image acquisition firmware for the **ams OSRAM NANEYE** sensor on **ESP32-S3**.
+
+The application configures the sensor over SPI, captures 12-bit RAW frames via DMA, stores them in PSRAM using double buffering, and serves them through an embedded HTTP interface or UDP.
 
 <p align="center">
   <img src="img1.jpeg" alt="Image 1" width="45%">
 </p>
-
-## Overview
-
-High-speed image acquisition firmware for the **ams OSRAM NANEYE** sensor on **ESP32-S3**.
-
-The application configures the sensor over SPI, captures 12-bit RAW frames via DMA, stores them in PSRAM using double buffering, and serves them through an embedded HTTP interface or UDP.
-
-
 
 ## Features
 
@@ -72,6 +71,7 @@ Two frame buffers are allocated in PSRAM:
 
 After each frame completion, the buffers swap roles, preventing tearing and keeping capture continuous.
 
+<iframe frameborder="0" width="375" height="365" scrolling="no" src="https://circuitmaker.com/Projects/6BFFED39-F093-4A0D-BEF9-0643B47B38B2/embeded"></iframe>
 ---
 
 ## Connect to the ESP
