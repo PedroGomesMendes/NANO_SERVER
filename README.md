@@ -71,8 +71,8 @@ Two frame buffers are allocated in PSRAM:
 
 After each frame completion, the buffers swap roles, preventing tearing and keeping capture continuous.
 
-<iframe frameborder="0" width="375" height="365" scrolling="no" src="https://circuitmaker.com/Projects/6BFFED39-F093-4A0D-BEF9-0643B47B38B2/embeded"></iframe>
 ---
+<iframe frameborder="0" width="375" height="365" scrolling="no" src="https://circuitmaker.com/Projects/6BFFED39-F093-4A0D-BEF9-0643B47B38B2/embeded"></iframe>
 
 ## Connect to the ESP
 
