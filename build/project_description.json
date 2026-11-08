@@ -1,7 +1,7 @@
 {
     "version":            "1.2",
     "project_name":       "hello_world",
-    "project_version":    "d6056be-dirty",
+    "project_version":    "75db6c7-dirty",
     "project_path":       "C:/Users/P.Mendes/Desktop/NANO_SERVER",
     "idf_path":           "C:/esp/v5.5.3/esp-idf",
     "build_dir":          "C:/Users/P.Mendes/Desktop/NANO_SERVER/build",
@@ -865,7 +865,7 @@
             "managed_reqs": [],
             "managed_priv_reqs": [],
             "file": "C:/Users/P.Mendes/Desktop/NANO_SERVER/build/esp-idf/main/libmain.a",
-            "sources": [ "C:/Users/P.Mendes/Desktop/NANO_SERVER/main/NANOSERVER.c", "C:/Users/P.Mendes/Desktop/NANO_SERVER/build/index.html.S" ],
+            "sources": [ "C:/Users/P.Mendes/Desktop/NANO_SERVER/main/naneye.c", "C:/Users/P.Mendes/Desktop/NANO_SERVER/main/NANOSERVER.c", "C:/Users/P.Mendes/Desktop/NANO_SERVER/build/index.html.S" ],
             "include_dirs": []
         },
         "mbedtls": {

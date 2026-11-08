@@ -13,123 +13,38 @@
 #include "esp_task_wdt.h"
 #include "lwip/inet.h"
 
-#define ROWS_IN_RESET_POS 8
-#define VRST_PIX_POS 6
-#define RAMP_GAIN_POS 4
-#define OFFSET_RAMP_POS 2
-#define OUTPUT_CURR_POS 0
-// Bitpositionen_Reg1
-#define ROWS_DELAY_POS 11
-#define BIAS_CURR_POS 10
-#define CDS_GAIN_POS 9
-#define OUTPUT_MODE_POS 8
-#define MCLK_MODE_POS 6
-#define VREF_POS 4
-#define CVC_CURR_POS 2
-#define IDLE_MODE_POS 1
-#define HIGH_SPEED_POS 0
+#include "naneye.h"
 
-// Bitmasken_Reg0
-#define ROWS_IN_RESET_MASK 0xFF // 8 Bit
-#define VRST_PIX_MASK 0x03		// 2 Bit
-#define RAMP_GAIN_MASK 0x03		// 2 Bit
-#define OFFSET_RAMP_MASK 0x03	// 2 Bit
-#define OUTPUT_CURR_MASK 0x03	// 2 Bit
-// Bitmasken_Reg1
-#define ROWS_DELAY_MASK 0x1F  // 5 Bit
-#define BIAS_CURR_MASK 0x01	  // 1 Bit
-#define CDS_GAIN_MASK 0x01	  // 1 Bit
-#define OUTPUT_MODE_MASK 0x01 // 1 Bit
-#define MCLK_MODE_MASK 0x03	  // 2 Bit
-#define VREF_MASK 0x03		  // 2 Bit
-#define CVC_CURR_MASK 0x03	  // 2 Bit
-#define IDLE_MODE_MASK 0x01	  // 1 Bit
-#define HIGH_SPEED_MASK 0x01  // 1 Bit
+static naneye_t naneye;
+uint8_t *buffer1 = NULL;
+uint8_t *buffer2 = NULL;
+static uint8_t *write_buffer;
+static uint8_t *read_buffer;
+
+bool stop_stream       = false;
+bool naneye_present    = true;
+bool poncha040_present = false;
+
+#define IMG_SIZE_BYTES NANEYE_IMG_W * NANEYE_IMG_H * NANEYE_PIXEL_BITS / 8
+
+#define SERVER_IP  "192.168.4.2"
+#define SEND_PORT 5001
+#define RECV_PORT 5002
 
 
+#define  WEBSERVER  1
+#define  UPD_SENDER 0
+
+
+static const char *TAG = "NANOSERVER";
 
 #define PIN_NUM_MISO 12
 #define PIN_NUM_MOSI 17
 #define PIN_NUM_CLK  13
 #define PIN_NUM_CS   5
 #define GPIO_TOGGLE  14
+#define GPIO_ILLUM   10
 
-#define IMG_W 328
-#define IMG_H 320
-
-#define PIXEL_SIZE 2
-#define IMG_SIZE_BYTES (IMG_W * IMG_H * 12/8)
-
-volatile bool buffer_ready = false;
-
-uint8_t *write_buffer = NULL;
-uint8_t *read_buffer  = NULL;
-uint8_t *buffer_a = NULL;
-uint8_t *buffer_b = NULL;
-uint8_t *packet = NULL;
-
-#define BITS_PER_PIXEL 12
-#define WORD_BITS      16
-
-#define WORDS_PER_LINE_BITS (IMG_W * BITS_PER_PIXEL)
-#define WORDS_PER_LINE ((WORDS_PER_LINE_BITS + WORD_BITS - 1) / WORD_BITS) // 246
-
-#define SERVER_IP  "192.168.4.2"
-#define SERVER_PORT 5001
-
-#define  WEBSERVER  1
-#define  UPD_SENDER 0
-#define  NUM_TRANS 20
-#define  LINES_PER_TRANS 16
-
-
-static const char *TAG = "SPI_UDP";
-
-volatile uint16_t *rx_buffer = NULL;
-uint8_t rx_data[492*5] = {0};
-
-uint16_t reg0_val;
-uint16_t reg1_val; 
-const uint32_t update_code = 0x9;
-
-uint32_t frame0 = 0x3A2D91;                 //0x912D3A; 
-uint32_t frame1 = 0xCA0092;                // 0x920148; 
-uint32_t temp_frame0 = 0x3A2D91;           //0x912D3A; 
-uint32_t temp_frame1 = 0xCA0092;           // 0x920148; 
-
-spi_transaction_t t;
-spi_transaction_t trans[NUM_TRANS];
-spi_transaction_t *ret_trans;
-
-int exposure = 150; // 
-int gain = 1;       // 
-
-// Function to build the value for register 0 based on the provided parameters
-uint16_t build_reg0_value(uint8_t rows_in_reset,uint8_t vrst_pix,uint8_t ramp_gain,uint8_t offset_ramp,uint8_t output_curr)
-{
-	uint16_t value = 0;
-	value |= ((rows_in_reset & ROWS_IN_RESET_MASK) << ROWS_IN_RESET_POS);
-	value |= ((vrst_pix & VRST_PIX_MASK) << VRST_PIX_POS);
-	value |= ((ramp_gain & RAMP_GAIN_MASK) << RAMP_GAIN_POS);
-	value |= ((offset_ramp & OFFSET_RAMP_MASK) << OFFSET_RAMP_POS);
-	value |= ((output_curr & OUTPUT_CURR_MASK) << OUTPUT_CURR_POS);
-	return value;
-}
-// Function to build the value for register 1 based on the provided parameters
-uint16_t build_reg1_value(uint8_t rows_delay,uint8_t bias_curr_increase,uint8_t cds_gain,uint8_t output_mode,uint8_t mclk_mode,uint8_t vref,uint8_t cvc_curr,uint8_t idle_mode,uint8_t high_speed)
-{
-	uint16_t value = 0;
-	value |= ((rows_delay & ROWS_DELAY_MASK) << ROWS_DELAY_POS);
-	value |= ((bias_curr_increase & BIAS_CURR_MASK) << BIAS_CURR_POS);
-	value |= ((cds_gain & CDS_GAIN_MASK) << CDS_GAIN_POS);
-	value |= ((output_mode & OUTPUT_MODE_MASK) << OUTPUT_MODE_POS);
-	value |= ((mclk_mode & MCLK_MODE_MASK) << MCLK_MODE_POS);
-	value |= ((vref & VREF_MASK) << VREF_POS);
-	value |= ((cvc_curr & CVC_CURR_MASK) << CVC_CURR_POS);
-	value |= ((idle_mode & IDLE_MODE_MASK) << IDLE_MODE_POS);
-	value |= ((high_speed & HIGH_SPEED_MASK) << HIGH_SPEED_POS);
-	return value;
-}
 
 // Function to turn on the LDO (Low Dropout Regulator)
 void LDO_ON() 
@@ -139,36 +54,6 @@ void LDO_ON()
     gpio_set_level(GPIO_TOGGLE, 1);
 }
 
-// Function to send data over SPI
-esp_err_t spi_send_data(spi_device_handle_t handle, const uint8_t *data, size_t bits) {
-    memset(&t, 0, sizeof(t));
-    t.length = bits;
-    t.tx_buffer = data;
-    t.flags = 0;
-    return spi_device_transmit(handle, &t);
-}
-
-// Function to read data over SPI using DMA
-esp_err_t spi_read_dma_bits(spi_device_handle_t handle, void *dest_addr, size_t bits) {
-    memset(&t, 0, sizeof(t));
-    t.length = bits;
-    t.rx_buffer = dest_addr;
-    t.tx_buffer = NULL;
-    t.flags = 0;
-    return spi_device_transmit(handle, &t);
-}
-
-// Function to queue a SPI read transaction using DMA
-esp_err_t spi_read_dma_bits_queue(spi_device_handle_t handle,spi_transaction_t *t,void *dest_addr,size_t bits)
-{
-    memset(t, 0, sizeof(*t));
-
-    t->length    = bits;
-    t->rxlength  = bits;
-    t->rx_buffer = dest_addr;
-
-    return spi_device_queue_trans(handle, t, portMAX_DELAY);
-}
 
 //Function to initialize the WiFi access point
 void wifi_init_ap(void)
@@ -219,80 +104,55 @@ void wifi_init_ap(void)
 }
 
 //Core 0 task for SPI communication loop to NANEYE camera
-void core0_spi_loop(void *arg) {
-    
-    while(!buffer_ready);
+void core0_spi_loop(void *arg){
+ 
 
-    ESP_LOGI(TAG, "A init NANEYE...");
+    while (stop_stream){}
 
-    spi_bus_config_t buscfg = {
-        .miso_io_num = PIN_NUM_MOSI ,
-        .mosi_io_num = PIN_NUM_MISO,
-        .sclk_io_num = PIN_NUM_CLK,
-        .quadwp_io_num = -1,
-        .quadhd_io_num = -1,
-        .max_transfer_sz = 65536  // buffer completo
-    };
-    ESP_ERROR_CHECK(spi_bus_initialize(SPI3_HOST, &buscfg, SPI_DMA_CH_AUTO));
+select_sensor:
 
-    spi_device_interface_config_t devcfg = {
-        .clock_speed_hz = 31*1000*1000,
-        .mode = 0,
-        .spics_io_num = PIN_NUM_CS,
-        .queue_size = 8
+    if(naneye_present)
+    {
+        ESP_LOGI(TAG, "NANEYE PRESENT");
+
+        naneye_config_t cfg = {
+        .spi_host = SPI3_HOST,
+        .pin_mosi = PIN_NUM_MISO ,
+        .pin_miso = PIN_NUM_MOSI,
+        .pin_sclk = PIN_NUM_CLK,
+        .pin_cs   = PIN_NUM_CS,
+        .spi_clock_hz = 31 * 1000 * 1000,
+        .max_transfer_sz = 65536
         };
 
-    spi_device_handle_t handle;
+        naneye_init(&naneye,&cfg,write_buffer,read_buffer);
+        naneye_start(&naneye);
 
-
-    ESP_ERROR_CHECK(spi_bus_add_device(SPI3_HOST, &devcfg, &handle));
-    uint8_t tx_data[3];
-
-    esp_rom_delay_us(5000);
-
-    tx_data[0] = 0x00;                                          
-    spi_send_data(handle, tx_data, 1);
-    spi_send_data(handle, (uint8_t*) &frame0, 24);
-    spi_send_data(handle, (uint8_t*) &frame1, 24);
-
-    esp_rom_delay_us(10);
-    tx_data[0] = 0x00;  
-    tx_data[1] = 0x00;  
-    tx_data[2] = 0x00;  
-    spi_send_data(handle, tx_data, (4*12)-2);  //READ IGNORE
-
-    spi_send_data(handle, rx_data, 12 * (1312+329));
-    int offset = 0;
-
-    for (offset = 0; offset < IMG_H; offset += 16) { spi_read_dma_bits(handle,write_buffer + (offset * 492),IMG_W * 12 * 16);} //READ 1st image and IGNORE
-
-    spi_read_dma_bits(handle, rx_data, 12 * 8);
-
-    while (1) 
-    {
-
-        offset = 0;
-        spi_send_data(handle, (uint8_t*) &frame0, 24);
-        spi_send_data(handle, (uint8_t*) &frame1, 24);
-        spi_send_data(handle, rx_data, 12 * 644);
-        spi_send_data(handle, rx_data, 12 * 2 * 328);
-        spi_send_data(handle, rx_data, 12 * 2 * 328);
-        while (offset < IMG_H) 
+        while (1) 
         {
-            spi_read_dma_bits(handle, write_buffer + (offset * 492), (IMG_W * 12 * 16));
-            offset +=16;
+            naneye_capture_frame(&naneye);
+            if(stop_stream)
+            {
+                stop_stream = false;
+                naneye_deinit(&naneye);
+                goto select_sensor;
+            }
         }
-        uint8_t *tmp = write_buffer;
-        write_buffer = read_buffer;
-        read_buffer = tmp;
-        spi_send_data(handle, rx_data, 12 * 8);
     }
+
+    if(poncha040_present)
+    {
+        ESP_LOGI(TAG, "PONCHA040 PRESENT");
+    }
+
 }
+
 
 #if WEBSERVER
 
     extern const uint8_t index_html_start[] asm("_binary_index_html_start");
     extern const uint8_t index_html_end[]   asm("_binary_index_html_end");
+
     static esp_err_t index_handler(httpd_req_t *req)
     {
         size_t index_html_size = index_html_end - index_html_start;
@@ -303,54 +163,42 @@ void core0_spi_loop(void *arg) {
         return ESP_OK;
     }
 
-    //Function to handle HTTP requests for serving the image data
     static esp_err_t image_handler(httpd_req_t *req)
     {
         httpd_resp_set_type(req, "application/octet-stream");
         httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
         httpd_resp_set_hdr(req, "Connection", "keep-alive");
-
-        httpd_resp_send(req, (char *)read_buffer, IMG_SIZE_BYTES);
-
+        httpd_resp_send(req, (char *)naneye.read_buffer, IMG_SIZE_BYTES);
         return ESP_OK;
     }
 
-    //Function to update the camera registers based on the current exposure and gain values
-    int update_reg() {
-        reg0_val = build_reg0_value(
-        exposure &0xFF  ,// rows_in_reset
-        0b10            ,// vrst_pix
-        gain&0x03       ,// ramp_gain
-        0b11,		        // offset_ramp
-        0b11		        // output_curr
-        );
-                
-        reg1_val = build_reg1_value(
-        0b000000, // rows_delay, 00001
-        0,		  // bias_curr_increase
-        0,		  // cds_gain
-        0,		  // output_mode
-        0b10,	  // mclk_mode
-        0b10,	  // vref
-        0b01,	  // cvc_curr
-        0,		  // idle_mode
-        1		  // high_speed
-        );
-
-        temp_frame0 = ((update_code & 0xF) << 20) | ((0 & 0x7) << 17) | ((uint32_t)reg0_val << 1);
-        temp_frame1 = ((update_code & 0xF) << 20) | ((1 & 0x7) << 17) | ((uint32_t)reg1_val << 1); 
-
-        frame0 = ((temp_frame0 & 0x0000FF) << 16) |
-        ( temp_frame0 & 0x00FF00) |
-        ((temp_frame0 & 0xFF0000) >> 16);             
-
-        frame1 = ((temp_frame1 & 0x0000FF) << 16) |
-        ( temp_frame1 & 0x00FF00) |
-        ((temp_frame1 & 0xFF0000) >> 16); 
-        return 0;
+    static esp_err_t reset_handler(httpd_req_t *req)
+    {
+        ESP_LOGI(TAG, "RESET SENSOR");
+        stop_stream = true;
+        LDO_ON();
+        httpd_resp_send(req, "OK", 2);
+        return ESP_OK;
     }
 
-    //Gain handler function to handle HTTP requests for setting the gain value
+    static esp_err_t illumination_handler(httpd_req_t *req)
+    {
+        char buf[32];
+        int buf_len = httpd_req_get_url_query_len(req) + 1;
+        ESP_LOGI(TAG, "ILLUMINATION CONTROL");
+
+        if (buf_len > sizeof(buf)) return ESP_FAIL;
+
+        if (httpd_req_get_url_query_str(req, buf, buf_len) == ESP_OK) {
+            char param[8];
+            if (httpd_query_key_value(buf, "value", param, sizeof(param)) == ESP_OK) {
+            }
+        }
+
+        httpd_resp_send(req, "OK", 2);
+        return ESP_OK;
+    }
+
     static esp_err_t gain_handler(httpd_req_t *req)
     {
         char buf[32];
@@ -361,8 +209,8 @@ void core0_spi_loop(void *arg) {
         if (httpd_req_get_url_query_str(req, buf, buf_len) == ESP_OK) {
             char param[8];
             if (httpd_query_key_value(buf, "value", param, sizeof(param)) == ESP_OK) {
-             gain = atoi(param);
-                update_reg();
+                naneye_set_gain(&naneye, atoi(param));
+                ESP_LOGE("MAIN", "GAIN");
             }
         }
 
@@ -370,7 +218,6 @@ void core0_spi_loop(void *arg) {
         return ESP_OK;
     }
 
-    //Exposure handler function to handle HTTP requests for setting the exposure value
     static esp_err_t exposure_handler(httpd_req_t *req)
     {
         char buf[32];
@@ -381,8 +228,8 @@ void core0_spi_loop(void *arg) {
         if (httpd_req_get_url_query_str(req, buf, buf_len) == ESP_OK) {
             char param[8];
             if (httpd_query_key_value(buf, "value", param, sizeof(param)) == ESP_OK) {
-                exposure = atoi(param);
-                update_reg();
+                naneye_set_exposure(&naneye, atoi(param));
+                ESP_LOGE("MAIN", "EXPOSSURE");
             }
         }
 
@@ -390,7 +237,32 @@ void core0_spi_loop(void *arg) {
         return ESP_OK;
     }
 
-    // Function to start the web server and register URI handlers
+    static esp_err_t select_sensor_handler(httpd_req_t *req)
+    {
+        char buf[32];
+        int buf_len = httpd_req_get_url_query_len(req) + 1;
+
+        if (buf_len > sizeof(buf)) return ESP_FAIL;
+
+        if (httpd_req_get_url_query_str(req, buf, buf_len) == ESP_OK) {
+            char param[8];
+            if (httpd_query_key_value(buf, "value", param, sizeof(param)) == ESP_OK) 
+            {
+                if(atoi(param) == 1){
+                    naneye_present = true;
+                    poncha040_present = false;
+                }
+                if(atoi(param) == 0){
+                    naneye_present = false;
+                    poncha040_present = true; 
+                }
+            }
+        }
+
+        httpd_resp_send(req, "OK", 2);
+        return ESP_OK;
+    }
+
     static httpd_handle_t start_webserver(void)
     {
         httpd_config_t config = HTTPD_DEFAULT_CONFIG();
@@ -434,8 +306,31 @@ void core0_spi_loop(void *arg) {
             };
             httpd_register_uri_handler(server, &gain_page);
 
+            httpd_uri_t illum_page = {
+                .uri = "/illum",
+                .method = HTTP_GET,
+                .handler = illumination_handler,
+                .user_ctx = NULL
+            };
+            httpd_register_uri_handler(server, &illum_page);
+
+            httpd_uri_t reset_page = {
+                .uri = "/reset",
+                .method = HTTP_GET,
+                .handler = reset_handler,
+                .user_ctx = NULL
+            };
+            httpd_register_uri_handler(server, &reset_page);
+
+            httpd_uri_t select_sensor = {
+                .uri = "/select_sensor",
+                .method = HTTP_GET,
+                .handler = select_sensor_handler,
+                .user_ctx = NULL
+            };
+            httpd_register_uri_handler(server, &select_sensor);
+
             ESP_LOGI(TAG, "Webserver iniciado na porta 80");
-            buffer_ready = true;
             return server;
         }
 
@@ -457,46 +352,87 @@ void core0_spi_loop(void *arg) {
 
 #if UPD_SENDER
 
-    int udp_create_socket(struct sockaddr_in *dest_addr) {
-        int sock;
-        dest_addr->sin_family = AF_INET;
-        dest_addr->sin_port = htons(SERVER_PORT);
-        dest_addr->sin_addr.s_addr = inet_addr(SERVER_IP);
+int udp_create_tx_socket(struct sockaddr_in *dest_addr)
+{
+    int sock;
 
-        sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
-        if (sock < 0) {
-            ESP_LOGE(TAG, "Erro ao criar socket UDP");
-            return -1;
-        }
+    dest_addr->sin_family = AF_INET;
+    dest_addr->sin_port = htons(SEND_PORT);
+    dest_addr->sin_addr.s_addr = inet_addr(SERVER_IP);
 
-        ESP_LOGI(TAG, "Socket UDP criado para %s:%d", SERVER_IP, SERVER_PORT);
-        return sock;
+    sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+    if (sock < 0) {
+        ESP_LOGE(TAG, "Erro ao criar socket TX");
+        return -1;
     }
 
-    void core1_udp_loop(void *arg) {
+    ESP_LOGI(TAG, "Socket TX criado para %s:%d", SERVER_IP, SEND_PORT);
+    return sock;
+}
 
-        struct sockaddr_in dest_addr;
-        int sock = udp_create_socket(&dest_addr);
-        if (sock < 0) return;
+int udp_create_rx_socket()
+{
+    int sock;
+    struct sockaddr_in rx_addr;
 
-        buffer_ready = true;
-
-
-        int num_packets = 320;     
-        int raw_bytes_per_line = 492; // 328 pixels × 12 bits / 8
-        int i = 0;
-
-        while (1) {
-            while(i < num_packets){
-                memcpy(packet, &read_buffer[i * raw_bytes_per_line], raw_bytes_per_line);
-                packet[492]     = (uint8_t)(i & 0xFF);         // LSB
-                packet[493]     = (uint8_t)((i >> 8) & 0xFF);  // MSB
-                sendto(sock, packet, 494, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
-                i++;
-            }
-            i =0;
-        }
+    sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+    if (sock < 0) {
+        ESP_LOGE(TAG, "Erro ao criar socket RX");
+        return -1;
     }
+
+    rx_addr.sin_family = AF_INET;
+    rx_addr.sin_port = htons(RECV_PORT);
+    rx_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    if (bind(sock, (struct sockaddr *)&rx_addr, sizeof(rx_addr)) < 0) {
+        ESP_LOGE(TAG, "Erro no bind RX");
+        close(sock);
+        return -1;
+    }
+    ESP_LOGI(TAG, "Socket RX à escuta na porta %d", RECV_PORT);
+    return sock;
+}
+
+
+void core1_udp_loop(void *arg) {
+
+    struct sockaddr_in dest_addr;
+
+    int rx_sock = udp_create_rx_socket();
+    int tx_sock = udp_create_tx_socket(&dest_addr);
+
+    if (rx_sock < 0  || tx_sock < 0) return;
+
+    buffer_ready = true;
+
+    uint8_t rx_buffer[16];
+
+    int num_packets = 320;     
+    int raw_bytes_per_line = 492; // 328 pixels × 12 bits / 8
+    int i = 0;
+    int len;
+    while (1) {
+        len = recvfrom(rx_sock,rx_buffer,sizeof(rx_buffer),MSG_DONTWAIT,NULL,NULL);
+
+        if (len > 0)
+        {
+            exposure = rx_buffer[0];
+            gain     = rx_buffer[2];
+            ESP_LOGI("WIFI", "EXP: %d", rx_buffer[0]);
+            ESP_LOGI("WIFI", "GAIN: %d", rx_buffer[2]);
+            update_reg();
+        }
+        while(i < num_packets){
+            memcpy(packet, &read_buffer[i * raw_bytes_per_line], raw_bytes_per_line);
+            packet[492]     = (uint8_t)(i & 0xFF);         // LSB
+            packet[493]     = (uint8_t)((i >> 8) & 0xFF);  // MSB
+            sendto(tx_sock, packet, 494, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+            i++;
+        }
+        i = 0;
+    }
+}
 
 #endif
 
@@ -504,20 +440,22 @@ void core0_spi_loop(void *arg) {
 //Main application entry point
 void app_main(void) {
 
-    update_reg();
     gpio_set_direction(GPIO_TOGGLE, GPIO_MODE_OUTPUT);
     LDO_ON();
 
-    buffer_a = heap_caps_malloc(IMG_SIZE_BYTES, MALLOC_CAP_SPIRAM);
-    buffer_b = heap_caps_malloc(IMG_SIZE_BYTES, MALLOC_CAP_SPIRAM);
+    gpio_set_direction(GPIO_ILLUM, GPIO_MODE_OUTPUT);
+    gpio_set_level(GPIO_ILLUM, 0); // Turn on illumination
 
-    if (!buffer_a || !buffer_b) {
+    buffer1 = heap_caps_malloc(IMG_SIZE_BYTES, MALLOC_CAP_SPIRAM);
+    buffer2 = heap_caps_malloc(IMG_SIZE_BYTES, MALLOC_CAP_SPIRAM);
+
+    if (!buffer1 || !buffer2) {
         ESP_LOGE("MAIN", "Failed to allocate buffers");
         return;
     }
 
-    write_buffer  = buffer_a;
-    read_buffer   = buffer_b;
+    write_buffer  = buffer1;
+    read_buffer   = buffer2;
     
     esp_task_wdt_deinit();
     wifi_init_ap();

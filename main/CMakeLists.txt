@@ -1,4 +1,4 @@
-idf_component_register( SRCS "NANOSERVER.c"
+idf_component_register( SRCS "naneye.c" "NANOSERVER.c"
                         PRIV_REQUIRES spi_flash
                         REQUIRES esp_wifi
                         REQUIRES nvs_flash

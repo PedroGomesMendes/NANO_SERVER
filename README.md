@@ -33,6 +33,17 @@ The ESP32 configures the sensor via SPI, uses DMA to acquire frames, stores imag
   <img src="ESP32S3.jpg" alt="ESP32S3 board" width="60%">
 </p>
 
+### SPI Configuration
+
+| Parameter | Value   |
+| --------- | ------- |
+| SPI Host  | SPI3    |
+| Clock     | 31 MHz  |
+| DMA       | Enabled |
+| SPI Mode  | Mode 0  |
+
+---
+
 ### NANEYE wiring diagram
 
 The NANEYE sensor has only the following signal pins:
@@ -202,16 +213,7 @@ Default destination:
 
 ---
 
-## SPI Configuration
 
-| Parameter | Value   |
-| --------- | ------- |
-| SPI Host  | SPI3    |
-| Clock     | 31 MHz  |
-| DMA       | Enabled |
-| SPI Mode  | Mode 0  |
-
----
 
 ## Sensor Configuration
 
